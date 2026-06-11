@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community Reports - Smart Women Safety</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: black;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100%;
+            background: #1a1a1a;
+        }
+
+        .reports-sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 380px;
+            max-height: calc(100vh - 40px);
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 25px;
+            color: white;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .reports-sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .reports-sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .reports-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .reports-sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .report-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #fbbf24;
+            margin-bottom: 8px;
+        }
+
+        .report-subtitle {
+            color: #9ca3af;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .instruction-box {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid #3b82f6;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #93c5fd;
+        }
+
+        .location-display {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #d1d5db;
+        }
+
+        .location-display p {
+            margin: 4px 0;
+        }
+
+        .reports-list {
+            margin-top: 20px;
+            space-y: 12px;
+        }
+
+        .report-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .report-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .report-card-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .report-card-desc {
+            font-size: 12px;
+            color: #d1d5db;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .severity-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .severity-low {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .severity-medium {
+            background: rgba(234, 179, 8, 0.2);
+            color: #fde047;
+        }
+
+        .severity-high {
+            background: rgba(249, 115, 22, 0.2);
+            color: #fdba74;
+        }
+
+        .severity-critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-backdrop.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: rgba(20, 20, 20, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            color: white;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-header {
+            font-size: 24px;
+            font-weight: bold;
+            color: #fbbf24;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #e5e7eb;
+            font-weight: 500;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 12px 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 10px rgba(251, 191, 36, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .severity-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .severity-option {
+            padding: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .severity-option:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .severity-option.selected {
+            border-color: #fbbf24;
+            background: rgba(251, 191, 36, 0.1);
+        }
+
+        .severity-option.low {
+            color: #86efac;
+        }
+
+        .severity-option.medium {
+            color: #fde047;
+        }
+
+        .severity-option.high {
+            color: #fdba74;
+        }
+
+        .severity-option.critical {
+            color: #fca5a5;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        .btn-primary,
+        .btn-secondary {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(251, 191, 36, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .info-text {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 8px;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(251, 191, 36, 0.2);
+            border-top-color: #fbbf24;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .toast-notification {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid #22c55e;
+            color: #86efac;
+            padding: 15px 20px;
+            border-radius: 10px;
+            z-index: 3000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast-notification.error {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: #ef4444;
+            color: #fca5a5;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- MAP CONTAINER -->
+<div id="map"></div>
+
+<!-- SIDEBAR -->
+<div class="reports-sidebar">
+    <div class="report-title">Community Reports</div>
+    <div class="report-subtitle">Crowd-sourced Danger Reporting</div>
+
+    <div class="instruction-box">
+        <i class="fas fa-map-marker-alt" style="color: #93c5fd; margin-right: 8px;"></i>
+        Click on the map to report a danger location
+    </div>
+
+    <!-- LOCATION SEARCH WIDGET -->
+    <div style="margin-bottom: 20px;">
+        <label class="form-label" style="margin-bottom: 8px;">
+            <i class="fas fa-search" style="margin-right: 6px;"></i>
+            Or Search a Location:
+        </label>
+        {% include 'partials/search_widget.html' %}
+    </div>
+
+    <div class="location-display">
+        <p><strong>Your Location:</strong></p>
+        <p>Latitude: <span id="userLat">--</span></p>
+        <p>Longitude: <span id="userLng">--</span></p>
+    </div>
+
+    <div class="reports-list">
+        <div style="font-size: 13px; color: #9ca3af; margin-bottom: 10px;">
+            <i class="fas fa-list" style="margin-right: 8px;"></i>
+            <span id="reportCount">0</span> Reports
+        </div>
+        <div id="reportsList"></div>
+    </div>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="modal-backdrop" id="reportModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <i class="fas fa-exclamation-triangle" style="margin-right: 10px;"></i>
+            Report Unsafe Location
+        </div>
+
+        <form id="reportForm" onsubmit="submitReport(event)">
+            <div class="form-group">
+                <label class="form-label">Incident Title *</label>
+                <input type="text" class="form-input" id="reportTitle" placeholder="e.g., Poor street lighting" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description *</label>
+                <textarea class="form-textarea" id="reportDescription" placeholder="Describe the issue or danger..." required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Severity Level *</label>
+                <div class="severity-options">
+                    <div class="severity-option low" data-severity="low">
+                        <i class="fas fa-circle" style="font-size: 8px; margin-right: 6px;"></i>
+                        Low
+                    </div>
+                    <div class="severity-option medium" data-severity="medium">
+                        <i class="fas fa-circle" style="font-size: 8px; margin-right: 6px;"></i>
+                        Medium
+                    </div>
+                    <div class="severity-option high" data-severity="high">
+                        <i class="fas fa-circle" style="font-size: 8px; margin-right: 6px;"></i>
+                        High
+                    </div>
+                    <div class="severity-option critical" data-severity="critical">
+                        <i class="fas fa-circle" style="font-size: 8px; margin-right: 6px;"></i>
+                        Critical
+                    </div>
+                </div>
+                <input type="hidden" id="selectedSeverity" value="medium">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Location</label>
+                <div style="font-size: 12px; color: #d1d5db;">
+                    Latitude: <span id="reportLat">--</span>
+                    <br>
+                    Longitude: <span id="reportLng">--</span>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="button" class="btn-secondary" onclick="closeReportModal()">
+                    <i class="fas fa-times" style="margin-right: 6px;"></i>
+                    Cancel
+                </button>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-paper-plane" style="margin-right: 6px;"></i>
+                    Submit Report
+                </button>
+            </div>
+        </form>
+
+        <div class="info-text">
+            <i class="fas fa-info-circle" style="margin-right: 6px;"></i>
+            All reports help keep our community safe. Thank you!
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialize map
+    const map = L.map('map').setView([28.6139, 77.2090], 13); // Default to New Delhi
+
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+    }).addTo(map);
+
+    // State variables
+    let userMarker = null;
+    let tempMarker = null;
+    let selectedLocation = null;
+    let selectedSeverity = 'medium';
+    let reportMarkers = {};
+    let dangerCircles = [];
+
+    // Get user location
+    function getUserLocation() {
+        navigator.geolocation.watchPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+
+                document.getElementById('userLat').innerText = lat.toFixed(6);
+                document.getElementById('userLng').innerText = lng.toFixed(6);
+
+                if (!userMarker) {
+                    userMarker = L.marker([lat, lng], {
+                        icon: L.icon({
+                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34],
+                            shadowSize: [41, 41]
+                        })
+                    }).addTo(map).bindPopup('Your Location');
+                } else {
+                    userMarker.setLatLng([lat, lng]);
+                }
+
+                map.setView([lat, lng], 15);
+            },
+            (error) => {
+                console.error(error);
+                showNotification('Please enable location access to use this feature', 'error');
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            }
+        );
+    }
+
+    // Load reports from server
+    async function loadReports() {
+        try {
+            const response = await fetch('/api/reports/');
+            const data = await response.json();
+
+            // Clear existing markers
+            Object.values(reportMarkers).forEach(marker => map.removeLayer(marker));
+            dangerCircles.forEach(circle => map.removeLayer(circle));
+            reportMarkers = {};
+            dangerCircles = [];
+
+            // Add each report
+            data.reports.forEach(report => {
+                addReportToMap(report);
+            });
+
+            // Update count
+            document.getElementById('reportCount').innerText = data.reports.length;
+
+            // Update sidebar
+            displayReportsList(data.reports);
+        } catch (error) {
+            console.error('Error loading reports:', error);
+        }
+    }
+
+    // Add report to map
+    function addReportToMap(report) {
+        const severityConfig = {
+            low: { color: '#22c55e', radius: 100, icon: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png' },
+            medium: { color: '#eab308', radius: 250, icon: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png' },
+            high: { color: '#f97316', radius: 400, icon: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png' },
+            critical: { color: '#ef4444', radius: 600, icon: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png' }
+        };
+
+        const config = severityConfig[report.severity] || severityConfig.medium;
+
+        // Add marker
+        const marker = L.marker([report.latitude, report.longitude], {
+            icon: L.icon({
+                iconUrl: config.icon,
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            })
+        }).addTo(map).bindPopup(`
+            <div style="color: #000; width: 200px;">
+                <strong>${report.title}</strong><br>
+                <small>${report.description}</small><br>
+                <span style="display: inline-block; margin-top: 8px; padding: 4px 8px; border-radius: 4px; background: ${config.color}40; color: ${config.color};">
+                    ${report.severity.toUpperCase()}
+                </span>
+            </div>
+        `);
+
+        reportMarkers[report.id] = marker;
+
+        // Add danger circle
+        const circle = L.circle([report.latitude, report.longitude], {
+            color: config.color,
+            fillColor: config.color,
+            fillOpacity: 0.15,
+            radius: config.radius,
+            weight: 2,
+            dashArray: '5, 5'
+        }).addTo(map);
+
+        dangerCircles.push(circle);
+    }
+
+    // Display reports list in sidebar
+    function displayReportsList(reports) {
+        const container = document.getElementById('reportsList');
+        if (reports.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #9ca3af; padding: 20px; font-size: 12px;"><i class="fas fa-inbox" style="margin-right: 8px;"></i>No reports yet</div>';
+            return;
+        }
+
+        container.innerHTML = reports.map(report => {
+            const severityClass = `severity-${report.severity}`;
+            const date = new Date(report.created_at).toLocaleDateString();
+            return `
+                <div class="report-card" onclick="map.setView([${report.latitude}, ${report.longitude}], 16)">
+                    <div class="report-card-title">${report.title}</div>
+                    <div class="report-card-desc">${report.description.substring(0, 60)}...</div>
+                    <div>
+                        <span class="severity-badge ${severityClass}">${report.severity.toUpperCase()}</span>
+                        <span style="font-size: 11px; color: #9ca3af; margin-left: 8px;">${date}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Map click handler
+    map.on('click', function(e) {
+        if (tempMarker) {
+            map.removeLayer(tempMarker);
+        }
+
+        selectedLocation = e.latlng;
+
+        tempMarker = L.marker([e.latlng.lat, e.latlng.lng], {
+            icon: L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            })
+        }).addTo(map);
+
+        document.getElementById('reportLat').innerText = e.latlng.lat.toFixed(6);
+        document.getElementById('reportLng').innerText = e.latlng.lng.toFixed(6);
+
+        openReportModal();
+    });
+
+    // Severity selection
+    document.querySelectorAll('.severity-option').forEach(option => {
+        option.addEventListener('click', function() {
+            document.querySelectorAll('.severity-option').forEach(o => o.classList.remove('selected'));
+            this.classList.add('selected');
+            selectedSeverity = this.dataset.severity;
+            document.getElementById('selectedSeverity').value = selectedSeverity;
+        });
+    });
+
+    // Pre-select medium
+    document.querySelector('[data-severity="medium"]').classList.add('selected');
+
+    // Modal functions
+    function openReportModal() {
+        document.getElementById('reportModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeReportModal() {
+        document.getElementById('reportModal').classList.remove('active');
+        document.body.style.overflow = '';
+        if (tempMarker) {
+            map.removeLayer(tempMarker);
+            tempMarker = null;
+        }
+        document.getElementById('reportForm').reset();
+        selectedSeverity = 'medium';
+        document.querySelectorAll('.severity-option').forEach(o => o.classList.remove('selected'));
+        document.querySelector('[data-severity="medium"]').classList.add('selected');
+    }
+
+    // Submit report
+    async function submitReport(event) {
+        event.preventDefault();
+
+        if (!selectedLocation) {
+            showNotification('Please click on the map to select a location', 'error');
+            return;
+        }
+
+        const title = document.getElementById('reportTitle').value;
+        const description = document.getElementById('reportDescription').value;
+        const severity = document.getElementById('selectedSeverity').value;
+
+        try {
+            const response = await fetch('/api/reports/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: title,
+                    description: description,
+                    severity: severity,
+                    latitude: selectedLocation.lat,
+                    longitude: selectedLocation.lng
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            showNotification('Report submitted successfully! Thank you for keeping our community safe.', 'success');
+            closeReportModal();
+            loadReports();
+        } catch (error) {
+            console.error('Error submitting report:', error);
+            showNotification('Failed to submit report. Please try again.', 'error');
+        }
+    }
+
+    // Show notification
+    function showNotification(message, type = 'success') {
+        const notification = document.createElement('div');
+        notification.className = `toast-notification ${type}`;
+        notification.innerHTML = `<i class="fas fa-check-circle" style="margin-right: 10px;"></i>${message}`;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.remove();
+        }, 4000);
+    }
+
+    // Close modal on backdrop click
+    document.getElementById('reportModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeReportModal();
+        }
+    });
+
+    // Initialize
+    getUserLocation();
+    loadReports();
+
+    // Refresh reports every 30 seconds
+    setInterval(loadReports, 30000);
+
+    // ====== LOCATION SEARCH INTEGRATION ======
+    // Wait for widget to initialize
+    setTimeout(() => {
+        const searchInput = document.querySelector('.search-widget-container .search-input');
+        if (searchInput) {
+            // Handle location selection from search widget
+            searchInput.addEventListener('locationSelected', function(event) {
+                const location = event.detail;
+                
+                // Remove existing temp marker
+                if (tempMarker) {
+                    map.removeLayer(tempMarker);
+                }
+
+                selectedLocation = {
+                    lat: location.latitude,
+                    lng: location.longitude
+                };
+
+                // Add marker for selected location
+                tempMarker = L.marker([location.latitude, location.longitude], {
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                }).addTo(map).bindPopup(`<strong>${location.name}</strong>`);
+
+                // Center map on location
+                map.setView([location.latitude, location.longitude], 16);
+
+                // Update form
+                document.getElementById('reportLat').innerText = location.latitude.toFixed(6);
+                document.getElementById('reportLng').innerText = location.longitude.toFixed(6);
+
+                // Open report modal
+                openReportModal();
+            });
+        }
+    }, 100);
+</script>
+
+</body>
+</html>

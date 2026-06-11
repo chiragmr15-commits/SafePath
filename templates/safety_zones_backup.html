@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Safety Intelligence Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-heat/dist/leaflet-heat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    
+    body {
+      background: linear-gradient(135deg, #0f172a 0%, #1a1f3a 100%);
+      background-attachment: fixed;
+    }
+    
+    #map {
+      height: 60vh;
+      border-radius: 1rem;
+    }
+    
+    .leaflet-container {
+      border-radius: 1rem;
+    }
+    
+    .glassmorphism {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 1.5rem;
+    }
+    
+    .glassmorphism-card {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      border-radius: 1.5rem;
+      transition: all 0.3s ease;
+    }
+    
+    .glassmorphism-card:hover {
+      background: rgba(15, 23, 42, 0.9);
+      border-color: rgba(148, 163, 184, 0.3);
+      transform: translateY(-2px);
+    }
+    
+    .safety-score-ring {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 2rem;
+    }
+    
+    .toggle-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .toggle-btn input {
+      display: none;
+    }
+    
+    .toggle-slider {
+      width: 48px;
+      height: 24px;
+      background-color: #64748b;
+      border-radius: 12px;
+      transition: background-color 0.3s;
+      display: inline-block;
+    }
+    
+    .toggle-btn input:checked + .toggle-slider {
+      background-color: #10b981;
+    }
+    
+    .toggle-slider::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 2px;
+      top: 2px;
+      background-color: white;
+      border-radius: 50%;
+      transition: left 0.3s;
+    }
+    
+    .toggle-btn input:checked + .toggle-slider::after {
+      left: 26px;
+    }
+    
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    
+    .stat-item:last-child {
+      border-bottom: none;
+    }
+    
+    .chart-container {
+      position: relative;
+      height: 300px;
+      width: 100%;
+    }
+    
+    .danger-level-low {
+      color: #10b981;
+    }
+    
+    .danger-level-moderate {
+      color: #f59e0b;
+    }
+    
+    .danger-level-high {
+      color: #f97316;
+    }
+    
+    .danger-level-critical {
+      color: #ef4444;
+    }
+    
+    .pulse-animation {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .smooth-transition {
+      transition: all 0.3s ease;
+    }
+    
+    .recommendation-item {
+      padding: 1rem;
+      margin: 0.5rem 0;
+      background: rgba(16, 185, 129, 0.1);
+      border-left: 3px solid #10b981;
+      border-radius: 0.5rem;
+    }
+    
+    @media (max-width: 1024px) {
+      #map {
+        height: 50vh;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100">
+  <div class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <div class="border-b border-slate-700 bg-gradient-to-r from-slate-900 to-slate-900/50 backdrop-blur-sm p-6">
+      <div class="mx-auto max-w-full px-4">
+        <h1 class="text-4xl font-bold text-emerald-400">🛡️ Safety Intelligence Center</h1>
+        <p class="text-slate-400 mt-2">Real-time safety analysis, heatmaps & intelligent recommendations</p>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 mx-auto w-full px-4 py-6">
+      <div class="grid gap-6 lg:grid-cols-[360px_1fr_320px]">
+        <!-- Left Panel - Controls & Analysis -->
+        <div class="space-y-4 overflow-y-auto max-h-[calc(100vh-200px)]">
+          <!-- Heatmap Toggle -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold text-white">Heatmap</h3>
+              <label class="toggle-btn">
+                <input type="checkbox" id="heatmap-toggle" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <p class="text-xs text-slate-400">Visualize danger zones with color intensity</p>
+          </div>
+
+          <!-- Safe Places Toggle -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold text-white">Safe Places</h3>
+              <label class="toggle-btn">
+                <input type="checkbox" id="safe-places-toggle" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <p class="text-xs text-slate-400">Police, hospitals, metro stations & bus stops</p>
+          </div>
+
+          <!-- Time-Based Safety -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-4">⏰ Time-Based Safety</h3>
+            <div class="space-y-3">
+              <div class="stat-item">
+                <span class="text-slate-300">Current Time:</span>
+                <span id="current-time" class="font-semibold text-emerald-400">--:--</span>
+              </div>
+              <div class="stat-item">
+                <span class="text-slate-300">Period:</span>
+                <span id="time-period" class="font-semibold text-yellow-400">Daytime</span>
+              </div>
+              <div class="stat-item">
+                <span class="text-slate-300">Risk Level:</span>
+                <span id="time-risk" class="font-semibold text-green-400">Low</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Unsafe Zones List -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-4">📍 Unsafe Zones</h3>
+            <div id="zones-list" class="space-y-2 max-h-48 overflow-y-auto">
+              <p class="text-slate-400 text-sm">Loading zones...</p>
+            </div>
+          </div>
+
+          <!-- Area Analysis -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-3">📊 Area Analysis</h3>
+            <input type="text" id="area-search" placeholder="Search area..." class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 text-sm focus:border-emerald-400 focus:outline-none mb-3" />
+            <button id="analyze-btn" class="w-full px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-lg transition">Analyze Area</button>
+          </div>
+        </div>
+
+        <!-- Center - Map -->
+        <div class="space-y-4">
+          <div id="map" class="shadow-2xl"></div>
+          
+          <!-- Legend -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-3">🗺️ Map Legend</h3>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div><span class="inline-block w-3 h-3 bg-red-500 rounded-full mr-2"></span>Danger Zone</div>
+              <div><span class="inline-block w-3 h-3 bg-yellow-500 rounded-full mr-2"></span>Warning Zone</div>
+              <div><span class="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2"></span>Police Station</div>
+              <div><span class="inline-block w-3 h-3 bg-pink-500 rounded-full mr-2"></span>Hospital</div>
+              <div><span class="inline-block w-3 h-3 bg-purple-500 rounded-full mr-2"></span>Metro Station</div>
+              <div><span class="inline-block w-3 h-3 bg-green-500 rounded-full mr-2"></span>Bus Station</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Panel - Details & Recommendations -->
+        <div class="space-y-4 overflow-y-auto max-h-[calc(100vh-200px)]">
+          <!-- Area Safety Score -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-4">Safety Score</h3>
+            <div id="score-display" class="flex flex-col items-center">
+              <div class="safety-score-ring" id="score-ring" style="background: conic-gradient(#ef4444 0deg, #f59e0b 90deg, #10b981 180deg);">
+                <span id="score-value">--</span>
+              </div>
+              <p id="score-level" class="mt-3 text-lg font-semibold text-slate-300">--</p>
+            </div>
+          </div>
+
+          <!-- Current Area Stats -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-4">📈 Area Statistics</h3>
+            <div class="space-y-2">
+              <div class="stat-item">
+                <span class="text-slate-300">Reports:</span>
+                <span id="area-reports" class="font-semibold text-emerald-400">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="text-slate-300">Unsafe Zones:</span>
+                <span id="area-zones" class="font-semibold text-red-400">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="text-slate-300">Last Incident:</span>
+                <span id="last-incident" class="font-semibold text-yellow-400">N/A</span>
+              </div>
+              <div class="stat-item">
+                <span class="text-slate-300">Risk Trend:</span>
+                <span id="risk-trend" class="font-semibold text-orange-400">↑ Rising</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Recommendations -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-4">💡 AI Recommendations</h3>
+            <div id="recommendations" class="space-y-2 max-h-48 overflow-y-auto">
+              <p class="text-slate-400 text-sm">Click on an area to see recommendations</p>
+            </div>
+          </div>
+
+          <!-- Top Dangerous Areas -->
+          <div class="glassmorphism-card p-5 shadow-lg">
+            <h3 class="text-lg font-semibold text-white mb-4">⚠️ Top Dangerous Areas</h3>
+            <div id="dangerous-areas" class="space-y-2 max-h-40 overflow-y-auto">
+              <p class="text-slate-400 text-sm">Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom - Analytics Charts -->
+      <div class="grid gap-6 lg:grid-cols-2 mt-8">
+        <!-- Weekly Trends -->
+        <div class="glassmorphism-card p-6 shadow-lg">
+          <h3 class="text-lg font-semibold text-white mb-4">📊 Weekly Incidents</h3>
+          <div class="chart-container">
+            <canvas id="weekly-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Severity Distribution -->
+        <div class="glassmorphism-card p-6 shadow-lg">
+          <h3 class="text-lg font-semibold text-white mb-4">📋 Severity Distribution</h3>
+          <div class="chart-container">
+            <canvas id="severity-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== MAP INITIALIZATION ====================
+    const map = L.map('map').setView([12.9716, 77.5946], 12);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Layer groups
+    const zoneLayerGroup = L.layerGroup().addTo(map);
+    const heatmapLayerGroup = L.layerGroup();
+    const safePlacesLayerGroup = L.layerGroup();
+    
+    let heatmapLayer = null;
+    let zones = [];
+    let reports = [];
+    let chartInstances = {};
+    
+    // ==================== INITIALIZATION ====================
+    async function init() {
+      await loadZones();
+      await loadReports();
+      await loadTimeSafety();
+      await loadDangerousAreas();
+      await loadSafetyTrends();
+      setupEventListeners();
+      updateTime();
+      setInterval(updateTime, 60000);
+    }
+
+    // ==================== EVENT LISTENERS ====================
+    function setupEventListeners() {
+      document.getElementById('heatmap-toggle').addEventListener('change', toggleHeatmap);
+      document.getElementById('safe-places-toggle').addEventListener('change', toggleSafePlaces);
+      document.getElementById('analyze-btn').addEventListener('click', analyzeArea);
+      map.on('click', handleMapClick);
+    }
+
+    // ==================== MAP CLICK HANDLER ====================
+    function handleMapClick(event) {
+      const lat = event.latlng.lat;
+      const lng = event.latlng.lng;
+      loadAreaSafetyScore(lat, lng);
+    }
+
+    // ==================== ZONES MANAGEMENT ====================
+    async function loadZones() {
+      try {
+        const response = await fetch('/api/zones/');
+        const json = await response.json();
+        zones = json.zones || [];
+        drawZones();
+        updateZonesList();
+      } catch (error) {
+        console.error('Failed to load zones:', error);
+      }
+    }
+
+    function drawZones() {
+      zoneLayerGroup.clearLayers();
+      zones.forEach((zone) => {
+        L.circle([zone.latitude, zone.longitude], {
+          color: '#ef4444',
+          fillColor: '#dc2626',
+          fillOpacity: 0.35,
+          radius: zone.radius,
+          weight: 2,
+        }).addTo(zoneLayerGroup).bindPopup(
+          `<strong>${zone.name}</strong><br/>Radius: ${zone.radius}m`
+        );
+      });
+    }
+
+    function updateZonesList() {
+      const list = document.getElementById('zones-list');
+      if (zones.length === 0) {
+        list.innerHTML = '<p class="text-slate-400 text-sm">No unsafe zones</p>';
+        return;
+      }
+      list.innerHTML = zones.slice(0, 5).map(zone => `
+        <div class="px-3 py-2 bg-red-500/10 rounded border border-red-500/30 text-sm">
+          <p class="font-semibold text-red-400">${zone.name}</p>
+          <p class="text-slate-400 text-xs">${zone.radius}m radius</p>
+        </div>
+      `).join('');
+    }
+
+    // ==================== HEATMAP ====================
+    async function loadHeatmap() {
+      try {
+        const response = await fetch('/api/safety-heatmap/');
+        const data = await response.json();
+        renderHeatmap(data.heatmap_data);
+      } catch (error) {
+        console.error('Failed to load heatmap:', error);
+      }
+    }
+
+    function renderHeatmap(data) {
+      if (heatmapLayer) {
+        heatmapLayerGroup.removeLayer(heatmapLayer);
+      }
+      
+      if (data && data.length > 0) {
+        const heatmapData = data.map(point => [point.lat, point.lng, point.intensity]);
+        heatmapLayer = L.heatLayer(heatmapData, {
+          radius: 25,
+          blur: 15,
+          maxZoom: 17,
+          gradient: {0.4: '#10b981', 0.65: '#f59e0b', 0.8: '#f97316', 1.0: '#ef4444'}
+        });
+        heatmapLayerGroup.addLayer(heatmapLayer);
+        map.addLayer(heatmapLayerGroup);
+      }
+    }
+
+    function toggleHeatmap(event) {
+      if (event.target.checked) {
+        loadHeatmap();
+      } else {
+        map.removeLayer(heatmapLayerGroup);
+      }
+    }
+
+    // ==================== SAFE PLACES ====================
+    async function loadSafePlaces() {
+      try {
+        const response = await fetch('/api/safe-places/');
+        const data = await response.json();
+        renderSafePlaces(data.safe_places);
+      } catch (error) {
+        console.error('Failed to load safe places:', error);
+      }
+    }
+
+    function renderSafePlaces(places) {
+      safePlacesLayerGroup.clearLayers();
+      
+      const icons = {
+        police: L.circle([0, 0], {color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.7, radius: 400}),
+        hospital: L.circle([0, 0], {color: '#ec4899', fillColor: '#ec4899', fillOpacity: 0.7, radius: 400}),
+        metro: L.circle([0, 0], {color: '#a855f7', fillColor: '#a855f7', fillOpacity: 0.7, radius: 400}),
+        bus: L.circle([0, 0], {color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.7, radius: 400})
+      };
+
+      const colors = {
+        police: '#3b82f6',
+        hospital: '#ec4899',
+        metro: '#a855f7',
+        bus: '#22c55e'
+      };
+
+      ['police_stations', 'hospitals', 'metro_stations', 'bus_stations'].forEach(category => {
+        places[category].forEach(place => {
+          const typeKey = category.replace('_stations', '').replace('_stations', '');
+          L.circleMarker([place.lat, place.lng], {
+            radius: 6,
+            fillColor: colors[place.type],
+            color: colors[place.type],
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+          }).addTo(safePlacesLayerGroup).bindPopup(
+            `<strong>${place.name}</strong><br/>${place.type}`
+          );
+        });
+      });
+
+      if (document.getElementById('safe-places-toggle').checked) {
+        map.addLayer(safePlacesLayerGroup);
+      }
+    }
+
+    function toggleSafePlaces(event) {
+      if (event.target.checked) {
+        loadSafePlaces();
+      } else {
+        map.removeLayer(safePlacesLayerGroup);
+      }
+    }
+
+    // ==================== AREA SAFETY SCORE ====================
+    async function loadAreaSafetyScore(lat, lng, radius = 1000) {
+      try {
+        const response = await fetch(`/api/area-safety-score/?lat=${lat}&lon=${lng}&radius=${radius}`);
+        const data = await response.json();
+        displayAreaScore(data);
+      } catch (error) {
+        console.error('Failed to load area score:', error);
+      }
+    }
+
+    function displayAreaScore(data) {
+      // Update score ring
+      const scoreValue = data.safety_score;
+      let color;
+      if (scoreValue >= 80) color = '#10b981';
+      else if (scoreValue >= 60) color = '#f59e0b';
+      else if (scoreValue >= 40) color = '#f97316';
+      else color = '#ef4444';
+
+      document.getElementById('score-value').textContent = Math.round(scoreValue);
+      document.getElementById('score-ring').style.background = `conic-gradient(${color} 0deg, ${color} ${(scoreValue / 100) * 360}deg, #334155 ${(scoreValue / 100) * 360}deg)`;
+      document.getElementById('score-level').textContent = `${data.risk_level} Risk`;
+      document.getElementById('score-level').className = `mt-3 text-lg font-semibold danger-level-${data.risk_color}`;
+
+      // Update statistics
+      document.getElementById('area-reports').textContent = data.reports_count;
+      document.getElementById('area-zones').textContent = data.unsafe_zones_count;
+      document.getElementById('last-incident').textContent = data.days_since_incident 
+        ? `${data.days_since_incident} days ago`
+        : 'N/A';
+
+      // Generate recommendations
+      generateRecommendations(data);
+    }
+
+    function generateRecommendations(data) {
+      const recommendations = [];
+      
+      if (data.risk_level === 'Low') {
+        recommendations.push('✅ Area is relatively safe. Use regular precautions.');
+        recommendations.push('🕐 Best time: Anytime, but evening is safer.');
+      } else if (data.risk_level === 'Moderate') {
+        recommendations.push('⚠️ Stay alert and use main roads.');
+        recommendations.push('🕐 Avoid late night travel if possible.');
+        recommendations.push('📞 Keep emergency contacts handy.');
+      } else if (data.risk_level === 'High') {
+        recommendations.push('⚠️ Avoid this area after dark.');
+        recommendations.push('👥 Travel with companions.');
+        recommendations.push('📍 ' + (data.unsafe_zones.length > 0 
+          ? `${data.unsafe_zones.length} unsafe zone(s) nearby` 
+          : 'Stay on main roads'));
+      } else {
+        recommendations.push('🚨 Critical risk area.');
+        recommendations.push('❌ Avoid if possible.');
+        recommendations.push('👥 Never travel alone.');
+        recommendations.push('📞 Inform someone of your location.');
+      }
+
+      if (data.unsafe_zones.length > 0) {
+        recommendations.push(`🛑 Nearest danger zone: ${data.unsafe_zones[0].distance}m away`);
+      }
+
+      document.getElementById('recommendations').innerHTML = recommendations
+        .map(rec => `<div class="recommendation-item text-sm">${rec}</div>`)
+        .join('');
+    }
+
+    // ==================== TIME-BASED SAFETY ====================
+    async function loadTimeSafety() {
+      try {
+        const response = await fetch('/api/time-based-safety/');
+        const data = await response.json();
+        displayTimeSafety(data);
+      } catch (error) {
+        console.error('Failed to load time safety:', error);
+      }
+    }
+
+    function displayTimeSafety(data) {
+      document.getElementById('time-period').textContent = data.period;
+      document.getElementById('time-risk').textContent = data.base_risk;
+      document.getElementById('time-risk').className = `font-semibold danger-level-${
+        data.base_risk === 'Low' ? 'low' :
+        data.base_risk === 'Moderate' ? 'moderate' :
+        data.base_risk === 'High' ? 'high' : 'critical'
+      }`;
+    }
+
+    function updateTime() {
+      const now = new Date();
+      document.getElementById('current-time').textContent = now.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    }
+
+    // ==================== REPORTS MANAGEMENT ====================
+    async function loadReports() {
+      try {
+        const response = await fetch('/api/reports/');
+        const json = await response.json();
+        reports = json.reports || [];
+      } catch (error) {
+        console.error('Failed to load reports:', error);
+      }
+    }
+
+    // ==================== DANGEROUS AREAS ====================
+    async function loadDangerousAreas() {
+      try {
+        const response = await fetch('/api/dangerous-areas/');
+        const data = await response.json();
+        displayDangerousAreas(data.dangerous_areas);
+      } catch (error) {
+        console.error('Failed to load dangerous areas:', error);
+      }
+    }
+
+    function displayDangerousAreas(areas) {
+      const list = document.getElementById('dangerous-areas');
+      list.innerHTML = areas.slice(0, 5).map((area, idx) => `
+        <div class="px-3 py-2 bg-red-500/10 rounded border border-red-500/30 text-sm cursor-pointer hover:bg-red-500/20 transition"
+             onclick="loadAreaSafetyScore(${area.lat}, ${area.lng})">
+          <p class="font-semibold text-red-400">${idx + 1}. ${area.area}</p>
+          <p class="text-slate-400 text-xs">${area.incidents} incident(s)</p>
+        </div>
+      `).join('');
+    }
+
+    // ==================== SAFETY TRENDS ====================
+    async function loadSafetyTrends() {
+      try {
+        const response = await fetch('/api/safety-trends/');
+        const data = await response.json();
+        renderCharts(data);
+      } catch (error) {
+        console.error('Failed to load safety trends:', error);
+      }
+    }
+
+    function renderCharts(data) {
+      // Weekly chart
+      const weeklyCtx = document.getElementById('weekly-chart');
+      if (chartInstances.weekly) chartInstances.weekly.destroy();
+      chartInstances.weekly = new Chart(weeklyCtx, {
+        type: 'line',
+        data: {
+          labels: data.weekly_data.map(d => d.day),
+          datasets: [{
+            label: 'Incidents',
+            data: data.weekly_data.map(d => d.incidents),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } },
+            x: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } }
+          }
+        }
+      });
+
+      // Severity chart
+      const severityCtx = document.getElementById('severity-chart');
+      if (chartInstances.severity) chartInstances.severity.destroy();
+      chartInstances.severity = new Chart(severityCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Low', 'Medium', 'High', 'Critical'],
+          datasets: [{
+            data: [
+              data.severity_trends.low,
+              data.severity_trends.medium,
+              data.severity_trends.high,
+              data.severity_trends.critical
+            ],
+            backgroundColor: ['#10b981', '#f59e0b', '#f97316', '#ef4444']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#cbd5e1' } } }
+        }
+      });
+    }
+
+    // ==================== AREA ANALYSIS ====================
+    function analyzeArea() {
+      const query = document.getElementById('area-search').value;
+      if (query) {
+        const areas = {
+          'whitefield': [12.9698, 77.7499],
+          'koramangala': [12.9316, 77.6245],
+          'btm layout': [12.9176, 77.6101],
+          'indiranagar': [12.9745, 77.6412],
+          'majestic': [12.9757, 77.5663]
+        };
+        const key = query.toLowerCase();
+        if (areas[key]) {
+          const [lat, lng] = areas[key];
+          loadAreaSafetyScore(lat, lng);
+          map.setView([lat, lng], 14);
+        }
+      }
+    }
+
+    // ==================== INITIAL LOAD ====================
+    init();
+    loadHeatmap();
+    loadSafePlaces();
+  </script>
+</body>
+</html>

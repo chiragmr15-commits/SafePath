@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - SafePath AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* ==================== THEME SYSTEM ==================== */
+        :root {
+            --bg-primary: #020617;
+            --bg-secondary: #071426;
+            --bg-tertiary: #0B1120;
+            --card-bg: rgba(255, 255, 255, 0.08);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --accent-primary: #3B82F6;
+            --accent-secondary: #8B5CF6;
+            --accent-tertiary: #EC4899;
+            --accent-green: #10B981;
+            --text-primary: #E2E8F0;
+            --text-secondary: #CBD5E1;
+            --text-tertiary: #94A3B8;
+        }
+
+        body.light-mode {
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F8F9FA;
+            --bg-tertiary: #F1F5F9;
+            --card-bg: rgba(59, 130, 246, 0.08);
+            --card-border: rgba(59, 130, 246, 0.2);
+            --accent-primary: #2563EB;
+            --accent-secondary: #7C3AED;
+            --accent-tertiary: #DB2777;
+            --accent-green: #059669;
+            --text-primary: #0F172A;
+            --text-secondary: #334155;
+            --text-tertiary: #64748B;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-tertiary) 100%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: background 0.5s ease, color 0.5s ease;
+        }
+
+        .glass {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            border: 1px solid var(--card-border);
+            transition: all 0.3s ease;
+        }
+
+        .glass:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.18);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--card-border);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 100;
+            animation: slideDown 0.5s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
+        .theme-toggle i {
+            font-size: 16px;
+            color: var(--accent-tertiary);
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 600;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(59, 130, 246, 0.1);
+            transform: translateX(-4px);
+        }
+
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-tertiary) 100%);
+            position: relative;
+            z-index: 10;
+        }
+
+        .content-animation {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .page-title {
+            font-size: 42px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
+        .page-subtitle {
+            font-size: 14px;
+            color: var(--text-tertiary);
+            margin-bottom: 40px;
+        }
+
+        .settings-section {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            border: 1px solid var(--card-border);
+            padding: 30px;
+            margin-bottom: 24px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title i {
+            font-size: 20px;
+            color: var(--accent-primary);
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .setting-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .setting-label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .setting-name {
+            font-size: 14px;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .setting-description {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .toggle-switch.active {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s ease;
+        }
+
+        .toggle-switch.active::after {
+            left: 26px;
+        }
+
+        .select-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .select-option {
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .select-option.active {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: white;
+        }
+
+        .select-option:hover {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
+        .success-message {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--accent-green);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            animation: slideInUp 0.3s ease-out;
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 15px 20px;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .page-title {
+                font-size: 32px;
+            }
+
+            .setting-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="flex flex-col h-screen">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-title">
+                SafePath AI Dashboard
+            </div>
+            <div class="header-right">
+                <div class="theme-toggle" id="themeToggle">
+                    <i class="fas fa-moon"></i>
+                </div>
+                <a href="/dashboard/" class="back-button">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="main-content content-animation">
+            <a href="/dashboard/" class="back-button mb-4">
+                <i class="fas fa-arrow-left"></i>
+                Back to Dashboard
+            </a>
+
+            <h1 class="page-title">Settings</h1>
+            <p class="page-subtitle">Manage your preferences and account settings</p>
+
+            <!-- Success Message -->
+            <div class="success-message" id="successMessage">
+                <i class="fas fa-check-circle mr-2"></i>
+                Settings saved successfully!
+            </div>
+
+            <!-- Theme Settings -->
+            <div class="settings-section">
+                <h2 class="section-title">
+                    <i class="fas fa-palette"></i>
+                    Theme Settings
+                </h2>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Display Theme</span>
+                        <span class="setting-description">Choose between dark and light mode</span>
+                    </div>
+                    <div class="select-group">
+                        <button class="select-option active" data-theme="dark" onclick="switchTheme('dark')">
+                            <i class="fas fa-moon mr-1"></i> Dark
+                        </button>
+                        <button class="select-option" data-theme="light" onclick="switchTheme('light')">
+                            <i class="fas fa-sun mr-1"></i> Light
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Auto Theme</span>
+                        <span class="setting-description">Automatically switch theme based on time of day</span>
+                    </div>
+                    <div class="toggle-switch" id="autoThemeToggle" onclick="toggleAutoTheme()"></div>
+                </div>
+            </div>
+
+            <!-- Notification Settings -->
+            <div class="settings-section">
+                <h2 class="section-title">
+                    <i class="fas fa-bell"></i>
+                    Notification Preferences
+                </h2>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Safety Alerts</span>
+                        <span class="setting-description">Get notified about unsafe areas and incidents</span>
+                    </div>
+                    <div class="toggle-switch active" id="safetyAlerts" onclick="toggleSetting(this)"></div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Location Updates</span>
+                        <span class="setting-description">Receive updates about location-based safety information</span>
+                    </div>
+                    <div class="toggle-switch active" id="locationUpdates" onclick="toggleSetting(this)"></div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Community Reports</span>
+                        <span class="setting-description">Get notified about new community reports</span>
+                    </div>
+                    <div class="toggle-switch active" id="communityReports" onclick="toggleSetting(this)"></div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Email Notifications</span>
+                        <span class="setting-description">Receive email notifications for important events</span>
+                    </div>
+                    <div class="toggle-switch active" id="emailNotifications" onclick="toggleSetting(this)"></div>
+                </div>
+            </div>
+
+            <!-- Dashboard Preferences -->
+            <div class="settings-section">
+                <h2 class="section-title">
+                    <i class="fas fa-chart-line"></i>
+                    Dashboard Preferences
+                </h2>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Show AI Recommendations</span>
+                        <span class="setting-description">Display AI-powered safety recommendations</span>
+                    </div>
+                    <div class="toggle-switch active" id="aiRecommendations" onclick="toggleSetting(this)"></div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Show Analytics</span>
+                        <span class="setting-description">Display safety analytics and trends</span>
+                    </div>
+                    <div class="toggle-switch active" id="analytics" onclick="toggleSetting(this)"></div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Show Heatmap</span>
+                        <span class="setting-description">Display safety heatmap on dashboard</span>
+                    </div>
+                    <div class="toggle-switch active" id="heatmap" onclick="toggleSetting(this)"></div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Quick Access</span>
+                        <span class="setting-description">Show quick access shortcuts on dashboard</span>
+                    </div>
+                    <div class="toggle-switch active" id="quickAccess" onclick="toggleSetting(this)"></div>
+                </div>
+            </div>
+
+            <!-- Account Preferences -->
+            <div class="settings-section">
+                <h2 class="section-title">
+                    <i class="fas fa-lock"></i>
+                    Account Preferences
+                </h2>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Session Timeout</span>
+                        <span class="setting-description">Automatically log out after inactivity</span>
+                    </div>
+                    <div class="select-group">
+                        <button class="select-option active" data-timeout="30" onclick="setSessionTimeout('30')">
+                            30 min
+                        </button>
+                        <button class="select-option" data-timeout="60" onclick="setSessionTimeout('60')">
+                            1 hour
+                        </button>
+                        <button class="select-option" data-timeout="480" onclick="setSessionTimeout('480')">
+                            8 hours
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Two-Factor Authentication</span>
+                        <span class="setting-description">Enhance security with 2FA</span>
+                    </div>
+                    <div class="toggle-switch" id="twoFactorAuth" onclick="toggleSetting(this)"></div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Data Privacy</span>
+                        <span class="setting-description">Help improve SafePath AI by sharing usage data</span>
+                    </div>
+                    <div class="toggle-switch active" id="dataPrivacy" onclick="toggleSetting(this)"></div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="saveSettings()">
+                    <i class="fas fa-save"></i>
+                    Save All Settings
+                </button>
+                <a href="/profile/" class="btn btn-secondary">
+                    <i class="fas fa-user"></i>
+                    View Profile
+                </a>
+                <a href="/dashboard/" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== THEME MANAGEMENT ====================
+        function switchTheme(theme) {
+            if (theme === 'light') {
+                document.body.classList.add('light-mode');
+                document.querySelector('[data-theme="light"]').classList.add('active');
+                document.querySelector('[data-theme="dark"]').classList.remove('active');
+            } else {
+                document.body.classList.remove('light-mode');
+                document.querySelector('[data-theme="dark"]').classList.add('active');
+                document.querySelector('[data-theme="light"]').classList.remove('active');
+            }
+            localStorage.setItem('theme', theme);
+        }
+
+        // Theme toggle in header
+        const themeToggle = document.getElementById('themeToggle');
+        const isDarkMode = localStorage.getItem('theme') !== 'light';
+
+        if (!isDarkMode) {
+            document.body.classList.add('light-mode');
+            document.querySelector('[data-theme="light"]').classList.add('active');
+            document.querySelector('[data-theme="dark"]').classList.remove('active');
+            themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            const isLight = document.body.classList.contains('light-mode');
+            switchTheme(isLight ? 'dark' : 'light');
+            themeToggle.innerHTML = isLight ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+        });
+
+        // ==================== SETTING TOGGLES ====================
+        function toggleSetting(element) {
+            element.classList.toggle('active');
+        }
+
+        function toggleAutoTheme() {
+            const toggle = document.getElementById('autoThemeToggle');
+            toggle.classList.toggle('active');
+            localStorage.setItem('autoTheme', toggle.classList.contains('active'));
+        }
+
+        function setSessionTimeout(minutes) {
+            document.querySelectorAll('[data-timeout]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            localStorage.setItem('sessionTimeout', minutes);
+        }
+
+        // ==================== SAVE SETTINGS ====================
+        function saveSettings() {
+            const settings = {
+                theme: document.body.classList.contains('light-mode') ? 'light' : 'dark',
+                autoTheme: document.getElementById('autoThemeToggle').classList.contains('active'),
+                safetyAlerts: document.getElementById('safetyAlerts').classList.contains('active'),
+                locationUpdates: document.getElementById('locationUpdates').classList.contains('active'),
+                communityReports: document.getElementById('communityReports').classList.contains('active'),
+                emailNotifications: document.getElementById('emailNotifications').classList.contains('active'),
+                aiRecommendations: document.getElementById('aiRecommendations').classList.contains('active'),
+                analytics: document.getElementById('analytics').classList.contains('active'),
+                heatmap: document.getElementById('heatmap').classList.contains('active'),
+                quickAccess: document.getElementById('quickAccess').classList.contains('active'),
+                twoFactorAuth: document.getElementById('twoFactorAuth').classList.contains('active'),
+                dataPrivacy: document.getElementById('dataPrivacy').classList.contains('active')
+            };
+
+            // Save to localStorage
+            localStorage.setItem('userSettings', JSON.stringify(settings));
+
+            // Show success message
+            const successMsg = document.getElementById('successMessage');
+            successMsg.style.display = 'block';
+            setTimeout(() => {
+                successMsg.style.display = 'none';
+            }, 3000);
+        }
+
+        // ==================== LOAD SAVED SETTINGS ====================
+        function loadSettings() {
+            const saved = localStorage.getItem('userSettings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                
+                if (settings.safetyAlerts) document.getElementById('safetyAlerts').classList.add('active');
+                if (settings.locationUpdates) document.getElementById('locationUpdates').classList.add('active');
+                if (settings.communityReports) document.getElementById('communityReports').classList.add('active');
+                if (settings.emailNotifications) document.getElementById('emailNotifications').classList.add('active');
+                if (settings.aiRecommendations) document.getElementById('aiRecommendations').classList.add('active');
+                if (settings.analytics) document.getElementById('analytics').classList.add('active');
+                if (settings.heatmap) document.getElementById('heatmap').classList.add('active');
+                if (settings.quickAccess) document.getElementById('quickAccess').classList.add('active');
+                if (settings.twoFactorAuth) document.getElementById('twoFactorAuth').classList.add('active');
+                if (settings.dataPrivacy) document.getElementById('dataPrivacy').classList.add('active');
+            }
+        }
+
+        // Initialize settings on page load
+        loadSettings();
+    </script>
+</body>
+</html>

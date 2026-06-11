@@ -1,0 +1,408 @@
+<!-- Search Widget Component -->
+<!-- Include this where you want a location search with autocomplete -->
+<!-- Usage: Customize the data-widget-type attribute for different search instances -->
+<!-- Supported types: 'source', 'destination', 'report', or any custom ID -->
+
+<style>
+    .search-widget-container {
+        position: relative;
+        width: 100%;
+    }
+
+    .search-input-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 12px 15px;
+        padding-right: 40px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.08);
+        color: white;
+        font-size: 14px;
+        outline: none;
+        transition: all 0.3s;
+    }
+
+    .search-input:focus {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(251, 191, 36, 0.3);
+        box-shadow: 0 0 10px rgba(251, 191, 36, 0.1);
+    }
+
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .search-clear-btn {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.5);
+        cursor: pointer;
+        font-size: 16px;
+        padding: 4px 8px;
+        display: none;
+        transition: color 0.2s;
+    }
+
+    .search-clear-btn:hover {
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .search-clear-btn.active {
+        display: block;
+    }
+
+    .search-loading-spinner {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(251, 191, 36, 0.2);
+        border-top-color: #fbbf24;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        display: none;
+    }
+
+    .search-loading-spinner.active {
+        display: block;
+    }
+
+    @keyframes spin {
+        to { transform: translateY(-50%) rotate(360deg); }
+    }
+
+    .search-suggestions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: none;
+        border-bottom-left-radius: 12px;
+        border-bottom-right-radius: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1001;
+        display: none;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .search-suggestions.active {
+        display: block;
+    }
+
+    .search-suggestions::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .search-suggestions::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .search-suggestions::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+    }
+
+    .search-suggestion-item {
+        padding: 12px 15px;
+        cursor: pointer;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 0.2s;
+        color: #d1d5db;
+        font-size: 13px;
+    }
+
+    .search-suggestion-item:last-child {
+        border-bottom: none;
+    }
+
+    .search-suggestion-item:hover {
+        background: rgba(251, 191, 36, 0.1);
+        color: #fbbf24;
+    }
+
+    .search-suggestion-name {
+        font-weight: 500;
+        color: #e5e7eb;
+    }
+
+    .search-suggestion-address {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 2px;
+    }
+
+    .search-no-results {
+        padding: 15px;
+        text-align: center;
+        color: #9ca3af;
+        font-size: 13px;
+    }
+
+    .search-error {
+        padding: 12px 15px;
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 8px;
+        margin-top: 8px;
+        font-size: 12px;
+    }
+</style>
+
+<div class="search-widget-container">
+    <div class="search-input-wrapper">
+        <input 
+            type="text" 
+            class="search-input" 
+            placeholder="Search location worldwide..."
+            autocomplete="off"
+        >
+        <button class="search-clear-btn" type="button">
+            <i class="fas fa-times"></i>
+        </button>
+        <div class="search-loading-spinner"></div>
+    </div>
+    
+    <div class="search-suggestions"></div>
+    <div class="search-error" style="display: none;"></div>
+</div>
+
+<script>
+    // Location Search Widget
+    class LocationSearchWidget {
+        constructor(container) {
+            this.container = container;
+            this.input = container.querySelector('.search-input');
+            this.suggestionsContainer = container.querySelector('.search-suggestions');
+            this.clearBtn = container.querySelector('.search-clear-btn');
+            this.loadingSpinner = container.querySelector('.search-loading-spinner');
+            this.errorContainer = container.querySelector('.search-error');
+            this.debounceTimer = null;
+            this.debounceDelay = 300; // ms
+            this.minQueryLength = 2;
+            this.selectedLocation = null;
+            
+            this.initEventListeners();
+        }
+        
+        initEventListeners() {
+            // Search input with debounce
+            this.input.addEventListener('input', (e) => this.onSearchInput(e));
+            
+            // Clear button
+            this.clearBtn.addEventListener('click', () => this.clearSearch());
+            
+            // Close suggestions when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-widget-container')) {
+                    this.closeSuggestions();
+                }
+            });
+            
+            // Keyboard navigation
+            this.input.addEventListener('keydown', (e) => this.onKeyDown(e));
+        }
+        
+        onSearchInput(event) {
+            const query = event.target.value.trim();
+            
+            // Update clear button visibility
+            this.clearBtn.classList.toggle('active', query.length > 0);
+            
+            // Clear previous timeout
+            clearTimeout(this.debounceTimer);
+            
+            // Hide error
+            this.errorContainer.style.display = 'none';
+            
+            if (query.length < this.minQueryLength) {
+                this.closeSuggestions();
+                return;
+            }
+            
+            // Set debounce timer for search
+            this.debounceTimer = setTimeout(() => {
+                this.performSearch(query);
+            }, this.debounceDelay);
+        }
+        
+        async performSearch(query) {
+            try {
+                this.loadingSpinner.classList.add('active');
+                
+                const response = await fetch(
+                    `/api/location-search/?q=${encodeURIComponent(query)}&limit=10&fuzzy=true`
+                );
+                
+                if (!response.ok) {
+                    throw new Error('Search failed');
+                }
+                
+                const data = await response.json();
+                this.loadingSpinner.classList.remove('active');
+                
+                if (data.results && data.results.length > 0) {
+                    this.displaySuggestions(data.results);
+                } else {
+                    this.showNoResults();
+                }
+            } catch (error) {
+                this.loadingSpinner.classList.remove('active');
+                this.showError('Search error. Please try again.');
+                console.error('Location search error:', error);
+            }
+        }
+        
+        displaySuggestions(results) {
+            this.suggestionsContainer.innerHTML = '';
+            
+            results.forEach(result => {
+                const item = document.createElement('div');
+                item.className = 'search-suggestion-item';
+                item.innerHTML = `
+                    <div class="search-suggestion-name">${this.escapeHtml(result.name)}</div>
+                    <div class="search-suggestion-address">${this.escapeHtml(result.display_name)}</div>
+                `;
+                
+                item.addEventListener('click', () => {
+                    this.selectLocation(result);
+                });
+                
+                this.suggestionsContainer.appendChild(item);
+            });
+            
+            this.suggestionsContainer.classList.add('active');
+        }
+        
+        showNoResults() {
+            this.suggestionsContainer.innerHTML = `
+                <div class="search-no-results">
+                    <i class="fas fa-search" style="margin-right: 6px;"></i>
+                    No locations found
+                </div>
+            `;
+            this.suggestionsContainer.classList.add('active');
+        }
+        
+        showError(message) {
+            this.errorContainer.textContent = `⚠ ${message}`;
+            this.errorContainer.style.display = 'block';
+        }
+        
+        selectLocation(location) {
+            this.selectedLocation = location;
+            this.input.value = location.name;
+            this.closeSuggestions();
+            this.clearBtn.classList.remove('active');
+            
+            // Trigger custom event for external handlers
+            const event = new CustomEvent('locationSelected', {
+                detail: location
+            });
+            this.input.dispatchEvent(event);
+            
+            // If map is available, zoom to location and place marker
+            if (window.map && location.latitude && location.longitude) {
+                this.zoomToLocation(location);
+            }
+            
+            // Log selected location
+            console.log('Selected location:', location);
+        }
+
+        zoomToLocation(location) {
+            // Zoom to location (level 15 for good detail)
+            window.map.setView([location.latitude, location.longitude], 15);
+            
+            // Place a temporary marker for the selected location
+            if (window.locationMarker) {
+                window.map.removeLayer(window.locationMarker);
+            }
+            
+            window.locationMarker = L.marker([location.latitude, location.longitude], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            }).addTo(window.map).bindPopup(`
+                <div style="color: #000;">
+                    <strong>${this.escapeHtml(location.name)}</strong><br>
+                    <small style="color: #666;">${this.escapeHtml(location.display_name || location.name)}</small><br>
+                    <small style="color: #999; display: block; margin-top: 5px;">
+                        ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}
+                    </small>
+                </div>
+            `).openPopup();
+        }
+        
+        clearSearch() {
+            this.input.value = '';
+            this.selectedLocation = null;
+            this.closeSuggestions();
+            this.clearBtn.classList.remove('active');
+            this.input.focus();
+        }
+        
+        closeSuggestions() {
+            this.suggestionsContainer.classList.remove('active');
+            this.suggestionsContainer.innerHTML = '';
+        }
+        
+        onKeyDown(event) {
+            if (event.key === 'Escape') {
+                this.closeSuggestions();
+            }
+        }
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        getSelectedLocation() {
+            return this.selectedLocation;
+        }
+    }
+    
+    // Initialize widget - Queue initialization for later to ensure all containers exist
+    if (!window.initializeSearchWidgets) {
+        window.initializeSearchWidgets = function() {
+            const allContainers = document.querySelectorAll('.search-widget-container');
+            allContainers.forEach(container => {
+                if (!container.widget) {
+                    const widget = new LocationSearchWidget(container);
+                    container.widget = widget;
+                }
+            });
+        };
+        
+        // Initialize on DOM ready and after a small delay to ensure all widgets are in DOM
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(window.initializeSearchWidgets, 100);
+            });
+        } else {
+            setTimeout(window.initializeSearchWidgets, 100);
+        }
+    }
+</script>
+

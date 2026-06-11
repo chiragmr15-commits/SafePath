@@ -1,0 +1,2321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SafePath AI - Smart Navigation</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css"/>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+            background: black;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+
+        .sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 380px;
+            max-height: calc(100vh - 40px);
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(15px);
+            border-radius: 25px;
+            padding: 25px;
+            color: white;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .input-box {
+            width: 100%;
+            padding: 14px;
+            margin-top: 12px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .input-box:focus {
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 10px rgba(251, 191, 36, 0.1);
+        }
+
+        .input-box::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 14px;
+            margin-top: 18px;
+            background: linear-gradient(45deg, #ec4899, #8b5cf6);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn:hover {
+            transform: scale(1.03);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: scale(1);
+        }
+
+        .use-location-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            margin-top: 10px;
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(168, 85, 247, 0.2));
+            color: #fbbf24;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1.5px solid rgba(251, 191, 36, 0.3);
+            font-size: 13px;
+            backdrop-filter: blur(10px);
+        }
+
+        .use-location-btn:hover {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(168, 85, 247, 0.3));
+            border-color: rgba(251, 191, 36, 0.6);
+            color: #fcd34d;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(251, 191, 36, 0.2);
+        }
+
+        .use-location-btn:active {
+            transform: translateY(0);
+        }
+
+        .use-location-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: scale(1);
+        }
+
+        .use-location-btn i {
+            transition: transform 0.3s ease;
+        }
+
+        .use-location-btn:hover i {
+            transform: scale(1.15);
+        }
+
+        .safety-card {
+            margin-top: 20px;
+            padding: 18px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .warning-card {
+            margin-top: 20px;
+            padding: 18px;
+            border-radius: 15px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            display: none;
+        }
+
+        .warning-card.active {
+            display: block;
+        }
+
+        .warning-header {
+            color: #fca5a5;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .warning-content {
+            color: #d1d5db;
+            font-size: 13px;
+        }
+
+        .danger-zone-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border-left: 3px solid;
+        }
+
+        .danger-zone-item.critical {
+            border-left-color: #ef4444;
+        }
+
+        .danger-zone-item.high {
+            border-left-color: #f97316;
+        }
+
+        .danger-zone-item.medium {
+            border-left-color: #eab308;
+        }
+
+        .danger-zone-item.low {
+            border-left-color: #22c55e;
+        }
+
+        .safety-score {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+
+        .safety-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .safety-badge.safe {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .safety-badge.moderate {
+            background: rgba(234, 179, 8, 0.2);
+            color: #fde047;
+        }
+
+        .safety-badge.unsafe {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: all 0.3s;
+            background: linear-gradient(90deg, #22c55e, #10b981);
+        }
+
+        .sos-btn {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            z-index: 2000;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            background: red;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 0 30px red;
+            transition: all 0.3s;
+        }
+
+        .sos-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .top-alert {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 13px;
+        }
+
+        .proximity-alert {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            z-index: 2000;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+            padding: 15px 20px;
+            border-radius: 12px;
+            min-width: 300px;
+            animation: slideUp 0.4s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .route-info-panel {
+            margin-top: 20px;
+            padding: 18px;
+            border-radius: 15px;
+            background: rgba(66, 133, 244, 0.1);
+            border: 1px solid rgba(66, 133, 244, 0.3);
+            display: none;
+        }
+
+        .route-info-panel.active {
+            display: block;
+        }
+
+        .route-info-header {
+            color: #60a5fa;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .route-info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .route-info-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 3px solid #4285F4;
+        }
+
+        .route-info-label {
+            font-size: 11px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .route-info-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+
+        .route-safety-details {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 13px;
+            color: #d1d5db;
+        }
+
+        .route-safety-item {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+        }
+
+        /* ROUTE COMPARISON PANEL STYLES */
+        .route-comparison-panel {
+            margin-top: 18px;
+            display: none;
+        }
+
+        .route-comparison-panel.active {
+            display: block;
+        }
+
+        .safer-alternative-badge {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            color: #86efac;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .safer-alternative-badge strong {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .route-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1.5px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .route-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(66, 133, 244, 0.5);
+            box-shadow: 0 0 15px rgba(66, 133, 244, 0.2);
+        }
+
+        .route-card.selected {
+            background: rgba(66, 133, 244, 0.15);
+            border-color: rgba(66, 133, 244, 0.8);
+            box-shadow: 0 0 20px rgba(66, 133, 244, 0.3);
+        }
+
+        .route-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .route-card-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+            color: #e5e7eb;
+            font-size: 14px;
+        }
+
+        .route-card-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .route-card-badge.recommended {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .route-card-badge.faster {
+            background: rgba(66, 133, 244, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(66, 133, 244, 0.3);
+        }
+
+        .route-card-badge.safer {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .route-card-badge.alternative {
+            background: rgba(168, 85, 247, 0.2);
+            color: #d8b4fe;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        .route-card-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .route-metric {
+            font-size: 12px;
+        }
+
+        .route-metric-label {
+            color: #9ca3af;
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+
+        .route-metric-value {
+            color: #e5e7eb;
+            font-weight: 600;
+        }
+
+        .route-safety-badge {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .route-safety-badge.safe {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .route-safety-badge.moderate {
+            background: rgba(234, 179, 8, 0.2);
+            color: #fde047;
+        }
+
+        .route-safety-badge.unsafe {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        /* ==================== NAVIGATION FEATURES ==================== */
+        .navigation-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .nav-btn {
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .nav-btn-preview {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(168, 85, 247, 0.2));
+            color: #93c5fd;
+            border: 1.5px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .nav-btn-preview:hover:not(:disabled) {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(168, 85, 247, 0.3));
+            border-color: rgba(59, 130, 246, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.2);
+        }
+
+        .nav-btn-start {
+            background: linear-gradient(45deg, #22c55e, #10b981);
+            color: white;
+            border: none;
+        }
+
+        .nav-btn-start:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(34, 197, 94, 0.3);
+        }
+
+        .nav-btn-steps {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(168, 85, 247, 0.2));
+            color: #fbbf24;
+            border: 1.5px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .nav-btn-steps:hover:not(:disabled) {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(168, 85, 247, 0.3));
+            border-color: rgba(251, 191, 36, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(251, 191, 36, 0.2);
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: scale(1);
+        }
+
+        /* Navigation Mode Panel */
+        .navigation-mode-panel {
+            margin-top: 20px;
+            padding: 18px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.1));
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            display: none;
+        }
+
+        .navigation-mode-panel.active {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+
+        .nav-mode-title {
+            color: #86efac;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .nav-mode-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .nav-info-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 8px;
+            border-left: 3px solid #22c55e;
+        }
+
+        .nav-info-label {
+            font-size: 10px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .nav-info-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #86efac;
+        }
+
+        .nav-mode-stop-btn {
+            width: 100%;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .nav-mode-stop-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        /* Steps Panel */
+        .steps-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 380px;
+            max-height: calc(100vh - 40px);
+            z-index: 999;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(15px);
+            border-radius: 25px;
+            padding: 25px;
+            color: white;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: none;
+            animation: slideInRight 0.3s ease;
+        }
+
+        .steps-panel.active {
+            display: block;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .steps-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .steps-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .steps-close-btn {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            font-size: 20px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .steps-close-btn:hover {
+            color: #e5e7eb;
+        }
+
+        .steps-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .step-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1.5px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 14px;
+            transition: all 0.3s ease;
+            position: relative;
+            padding-left: 50px;
+        }
+
+        .step-item.active {
+            background: rgba(34, 197, 94, 0.15);
+            border-color: rgba(34, 197, 94, 0.4);
+            box-shadow: 0 0 15px rgba(34, 197, 94, 0.2);
+        }
+
+        .step-item.completed {
+            background: rgba(107, 114, 128, 0.2);
+            border-color: rgba(107, 114, 128, 0.3);
+            opacity: 0.7;
+        }
+
+        .step-number {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 28px;
+            background: rgba(66, 133, 244, 0.2);
+            border: 2px solid #4285F4;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #93c5fd;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .step-item.active .step-number {
+            background: linear-gradient(45deg, #22c55e, #10b981);
+            border-color: #22c55e;
+            color: white;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translateY(-50%) scale(1); }
+            50% { transform: translateY(-50%) scale(1.1); }
+        }
+
+        .step-item.completed .step-number {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: #22c55e;
+            color: #86efac;
+        }
+
+        .step-instruction {
+            color: #e5e7eb;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .step-distance {
+            color: #9ca3af;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .step-distance i {
+            color: #4285F4;
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- MAP -->
+<div id="map"></div>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <h1 class="text-3xl font-bold text-yellow-400">
+        <i class="fas fa-shield-heart" style="margin-right: 10px;"></i>SafePath AI
+    </h1>
+
+    <p class="mt-2 text-gray-300">
+        Smart Women Safety Navigation
+    </p>
+
+    <!-- SOURCE LOCATION SEARCH -->
+    <div style="margin-top: 15px;">
+        <label class="text-sm font-semibold text-yellow-400" style="margin-bottom: 6px; display: block;">
+            <i class="fas fa-map-pin" style="margin-right: 6px;"></i>Source Location
+        </label>
+        {% include 'partials/search_widget.html' %}
+        <input type="hidden" id="sourceLocation">
+        
+        <!-- USE CURRENT LOCATION BUTTON -->
+        <button id="useCurrentLocationBtn" class="use-location-btn" title="Use your current location as source">
+            <i class="fas fa-location-crosshairs" style="margin-right: 8px;"></i>📍 Use My Current Location
+        </button>
+    </div>
+
+    <!-- DESTINATION LOCATION SEARCH -->
+    <div style="margin-top: 15px;">
+        <label class="text-sm font-semibold text-yellow-400" style="margin-bottom: 6px; display: block;">
+            <i class="fas fa-location-dot" style="margin-right: 6px;"></i>Destination
+        </label>
+        {% include 'partials/search_widget.html' %}
+        <input type="hidden" id="destinationLocation">
+    </div>
+
+    <!-- BUTTON -->
+    <button class="btn" id="routeBtn">
+        <i class="fas fa-map" style="margin-right: 8px;"></i>Find Safest Route
+    </button>
+
+    <!-- ROUTE WARNING CARD -->
+    <div class="warning-card" id="warningCard">
+        <div class="warning-header">
+            <i class="fas fa-exclamation-triangle"></i>
+            Route Safety Warning
+        </div>
+        <div class="warning-content">
+            <p><strong>This route passes through reported unsafe areas.</strong></p>
+            <p style="margin-top: 10px;">
+                <strong>Danger Zones Found:</strong> <span id="totalZonesCount">0</span>
+            </p>
+            <p>
+                <strong>High Severity Zones:</strong> <span id="highZonesCount">0</span>
+            </p>
+            <p>
+                <strong>Critical Severity Zones:</strong> <span id="criticalZonesCount">0</span>
+            </p>
+
+            <div style="margin-top: 15px; max-height: 200px; overflow-y: auto;">
+                <div id="dangerZonesList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ROUTE INFORMATION PANEL -->
+    <div class="route-info-panel" id="routeInfoPanel">
+        <div class="route-info-header">
+            <i class="fas fa-route" style="color: #4285F4;"></i>
+            Route Details
+        </div>
+        <div class="route-info-grid">
+            <div class="route-info-item">
+                <div class="route-info-label">Distance</div>
+                <div class="route-info-value"><span id="routeDistance">--</span> km</div>
+            </div>
+            <div class="route-info-item">
+                <div class="route-info-label">Estimated Time</div>
+                <div class="route-info-value"><span id="routeTime">--</span> mins</div>
+            </div>
+            <div class="route-info-item">
+                <div class="route-info-label">Safety Score</div>
+                <div class="route-info-value"><span id="routeSafetyScore">--</span>%</div>
+            </div>
+            <div class="route-info-item">
+                <div class="route-info-label">Danger Zones</div>
+                <div class="route-info-value"><span id="routeDangerZones">0</span></div>
+            </div>
+        </div>
+        <div class="route-safety-details">
+            <strong style="color: #e5e7eb;">Safety Assessment:</strong>
+            <div class="route-safety-item">
+                <span>Status:</span>
+                <span style="color: #60a5fa;" id="routeStatus">--</span>
+            </div>
+        </div>
+
+        <!-- NAVIGATION BUTTONS -->
+        <div class="navigation-buttons" id="navigationButtons" style="display: none;">
+            <button class="nav-btn nav-btn-preview" id="previewRouteBtn" title="Preview the selected route">
+                <i class="fas fa-eye"></i>
+                Preview Route
+            </button>
+            <button class="nav-btn nav-btn-start" id="startNavigationBtn" title="Start turn-by-turn navigation">
+                <i class="fas fa-arrow-right"></i>
+                Start Navigation
+            </button>
+            <button class="nav-btn nav-btn-steps" id="stepsBtn" style="grid-column: 1 / -1;" title="View turn-by-turn directions">
+                <i class="fas fa-list"></i>
+                📋 Steps
+            </button>
+        </div>
+
+        <!-- NAVIGATION MODE PANEL -->
+        <div class="navigation-mode-panel" id="navigationModePanel">
+            <div class="nav-mode-title">
+                <i class="fas fa-location-arrow"></i>
+                Navigation Active
+            </div>
+            <div class="nav-mode-info">
+                <div class="nav-info-item">
+                    <div class="nav-info-label">Remaining Distance</div>
+                    <div class="nav-info-value" id="remainingDistance">--</div>
+                </div>
+                <div class="nav-info-item">
+                    <div class="nav-info-label">Est. Arrival</div>
+                    <div class="nav-info-value" id="estimatedArrival">--</div>
+                </div>
+                <div class="nav-info-item">
+                    <div class="nav-info-label">Current Speed</div>
+                    <div class="nav-info-value" id="currentSpeed">--</div>
+                </div>
+                <div class="nav-info-item">
+                    <div class="nav-info-label">Progress</div>
+                    <div class="nav-info-value" id="navigationProgress">0%</div>
+                </div>
+            </div>
+            <button class="nav-mode-stop-btn" id="stopNavigationBtn">
+                <i class="fas fa-stop-circle"></i>
+                Stop Navigation
+            </button>
+        </div>
+    </div>
+
+    <!-- ROUTE COMPARISON PANEL -->
+    <div class="route-comparison-panel" id="routeComparisonPanel">
+        <!-- Safer Alternative Recommendation Badge -->
+        <div class="safer-alternative-badge" id="saferAlternativeBadge" style="display: none;">
+            <strong>⭐ Safer Alternative Recommended</strong>
+            <span id="saferAlternativeReason">Fastest route contains unsafe zones</span>
+        </div>
+
+        <!-- Routes Cards -->
+        <div id="routeCardsContainer">
+            <!-- Routes will be dynamically added here -->
+        </div>
+    </div>
+
+    <!-- SAFETY SCORE -->
+    <div class="safety-card">
+        <h2 class="text-xl font-bold mb-3">
+            <i class="fas fa-chart-pie" style="margin-right: 8px; color: #fbbf24;"></i>Route Safety Analysis
+        </h2>
+
+        <div class="safety-score">
+            <span id="safetyScoreValue">--</span>%
+            <div class="safety-badge" id="safetyBadge">
+                <i class="fas fa-circle" style="font-size: 8px; margin-right: 6px;"></i>
+                <span id="safetyBadgeText">Select a route</span>
+            </div>
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+        </div>
+
+        <div class="mt-6">
+            <h3 class="text-lg font-bold">Analysis Details</h3>
+            <div class="mt-4 space-y-2 text-sm">
+                <p id="communityReportsScore">
+                    <i class="fas fa-users" style="color: #93c5fd; margin-right: 8px;"></i>Community Reports: Good
+                </p>
+                <p id="dangerZoneScore">
+                    <i class="fas fa-map-location-dot" style="color: #93c5fd; margin-right: 8px;"></i>Predefined Zones: Good
+                </p>
+                <p id="routeLengthScore">
+                    <i class="fas fa-route" style="color: #93c5fd; margin-right: 8px;"></i>Route Distance: Calculating...
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIVE LOCATION -->
+    <div class="safety-card">
+        <h2 class="text-xl font-bold mb-3">
+            <i class="fas fa-location-dot" style="color: #fbbf24; margin-right: 8px;"></i>Live Location
+        </h2>
+        <p style="font-size: 12px; color: #d1d5db;">
+            Latitude: <span id="lat">--</span>
+        </p>
+        <p style="font-size: 12px; color: #d1d5db; margin-top: 6px;">
+            Longitude: <span id="lng">--</span>
+        </p>
+        <p style="font-size: 11px; color: #9ca3af; margin-top: 12px;">
+            <i class="fas fa-info-circle" style="margin-right: 6px;"></i>Monitoring for nearby danger zones...
+        </p>
+    </div>
+</div>
+
+<!-- ALERT -->
+<div class="top-alert">
+    <i class="fa-solid fa-shield-heart"></i>
+    Live Safety Monitoring Active
+</div>
+
+<!-- SOS BUTTON -->
+<button class="sos-btn" title="Emergency SOS" id="sosBtn">
+    <i class="fas fa-exclamation"></i>
+</button>
+
+<!-- SOS CONFIRMATION MODAL -->
+<div id="sosConfirmModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 2000; align-items: center; justify-content: center;">
+    <div style="background: #1a1a2e; border-radius: 20px; padding: 30px; max-width: 400px; text-align: center; border: 2px solid #ef4444;">
+        <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 20px; display: block;"></i>
+        <h2 style="color: #fff; margin-bottom: 15px; font-size: 24px;">Emergency SOS Alert</h2>
+        <p style="color: #d1d5db; margin-bottom: 20px;">Are you sure you want to send an SOS alert?</p>
+        <p style="color: #9ca3af; font-size: 12px; margin-bottom: 25px;">Your current location will be shared with all emergency contacts.</p>
+        
+        <div id="sosContactsPreview" style="background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: left; max-height: 150px; overflow-y: auto;">
+            <p style="color: #9ca3af; font-size: 12px; margin-bottom: 10px;">Contacts to notify:</p>
+            <div id="contactsNotifyList" style="color: #e5e7eb; font-size: 13px;"></div>
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <button id="sosConfirmCancel" style="flex: 1; background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.3s;">
+                Cancel
+            </button>
+            <button id="sosConfirmSend" style="flex: 1; background: linear-gradient(45deg, #ef4444, #dc2626); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.3s;">
+                <i class="fas fa-check" style="margin-right: 8px;"></i>Send SOS
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- SOS STATUS MODAL -->
+<div id="sosStatusModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 2001; align-items: center; justify-content: center;">
+    <div style="background: #1a1a2e; border-radius: 20px; padding: 30px; max-width: 500px; text-align: center; border: 1px solid rgba(255, 255, 255, 0.1); max-height: 80vh; overflow-y: auto;">
+        <div id="sosStatusContent"></div>
+    </div>
+</div>
+
+<!-- STEPS PANEL -->
+<div class="steps-panel" id="stepsPanel">
+    <div class="steps-header">
+        <div class="steps-title">
+            <i class="fas fa-directions"></i>
+            Directions
+        </div>
+        <button class="steps-close-btn" onclick="closeStepsPanel()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <div class="steps-list" id="stepsList"></div>
+</div>
+
+<script>
+    // CREATE MAP
+    const map = L.map('map').setView([20.5937, 78.9629], 5);
+    
+    // Make map globally accessible for search widget
+    window.map = map;
+
+    // DARK MAP STYLE
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // STATE VARIABLES
+    let userMarker;
+    let routingControl;
+    let currentRoute = null;
+    let communityReports = [];
+    let dangerMarkers = {};
+    let dangerCircles = [];
+    let userLocation = null;
+    let proximityAlertShown = {};
+
+    // LOAD COMMUNITY REPORTS
+    async function loadCommunityReports() {
+        try {
+            const response = await fetch('/api/reports/');
+            const data = await response.json();
+            communityReports = data.reports;
+
+            // Clear existing markers and circles
+            Object.values(dangerMarkers).forEach(marker => map.removeLayer(marker));
+            dangerCircles.forEach(circle => map.removeLayer(circle));
+            dangerMarkers = {};
+            dangerCircles = [];
+
+            // Display reports on map
+            communityReports.forEach(report => {
+                displayReportOnMap(report);
+            });
+        } catch (error) {
+            console.error('Error loading community reports:', error);
+        }
+    }
+
+    // DISPLAY REPORT ON MAP
+    function displayReportOnMap(report) {
+        const severityConfig = {
+            low: { color: '#22c55e', radius: 100, icon: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png' },
+            medium: { color: '#eab308', radius: 250, icon: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png' },
+            high: { color: '#f97316', radius: 400, icon: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png' },
+            critical: { color: '#ef4444', radius: 600, icon: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png' }
+        };
+
+        const config = severityConfig[report.severity] || severityConfig.medium;
+
+        // Add marker
+        const marker = L.marker([report.latitude, report.longitude], {
+            icon: L.icon({
+                iconUrl: config.icon,
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            })
+        }).addTo(map).bindPopup(`
+            <div style="color: #000; width: 200px;">
+                <strong>${report.title}</strong><br>
+                <small>${report.description}</small><br>
+                <span style="display: inline-block; margin-top: 8px; padding: 4px 8px; border-radius: 4px; background: ${config.color}40; color: ${config.color}; font-weight: bold;">
+                    ${report.severity.toUpperCase()}
+                </span>
+            </div>
+        `);
+
+        dangerMarkers[report.id] = marker;
+
+        // Add danger circle
+        const circle = L.circle([report.latitude, report.longitude], {
+            color: config.color,
+            fillColor: config.color,
+            fillOpacity: 0.1,
+            radius: config.radius,
+            weight: 2,
+            dashArray: '5, 5'
+        }).addTo(map);
+
+        dangerCircles.push(circle);
+    }
+
+    // LIVE GPS
+    let watchId = navigator.geolocation.watchPosition(
+        (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+
+            userLocation = { lat, lng };
+
+            document.getElementById("lat").innerText = lat.toFixed(6);
+            document.getElementById("lng").innerText = lng.toFixed(6);
+
+            if (!userMarker) {
+                userMarker = L.marker([lat, lng])
+                    .addTo(map)
+                    .bindPopup("You are here");
+            } else {
+                userMarker.setLatLng([lat, lng]);
+            }
+
+            // Check proximity to danger zones
+            checkProximityToDangerZones(lat, lng);
+        },
+        (error) => {
+            console.error(error);
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+        }
+    );
+
+    // CHECK PROXIMITY TO DANGER ZONES
+    function checkProximityToDangerZones(userLat, userLng) {
+        const proximityThreshold = 200; // meters
+
+        communityReports.forEach(report => {
+            const distance = calculateDistance(userLat, userLng, report.latitude, report.longitude);
+
+            if (distance < proximityThreshold && distance > 0) {
+                if (!proximityAlertShown[report.id]) {
+                    showProximityAlert(report, distance);
+                    proximityAlertShown[report.id] = true;
+                }
+            } else {
+                proximityAlertShown[report.id] = false;
+            }
+        });
+    }
+
+    // SHOW PROXIMITY ALERT
+    function showProximityAlert(report, distance) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'proximity-alert';
+        alertDiv.innerHTML = `
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <i class="fas fa-exclamation-circle" style="font-size: 20px; color: #fca5a5;"></i>
+                <div>
+                    <strong>${report.title}</strong><br>
+                    <small>Distance: ${distance.toFixed(0)}m - ${report.severity.toUpperCase()}</small>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(alertDiv);
+
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 6000);
+    }
+
+    // CALCULATE DISTANCE (Haversine)
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000; // Earth's radius in meters
+        const phi1 = lat1 * Math.PI / 180;
+        const phi2 = lat2 * Math.PI / 180;
+        const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+        const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(deltaPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
+    }
+
+    // Store route layers and markers
+    let routeLayers = [];
+    let routeMarkers = [];
+
+    // DRAW ROUTE ON MAP - Updated for multiple routes
+    function drawRoute(routeCoords, routeIndex = 0, isSelected = false) {
+        if (!routeCoords || routeCoords.length < 2) return;
+
+        const routeLatLngs = routeCoords.map(coord => L.latLng(coord[0], coord[1]));
+
+        // All routes use blue color, but with different opacity
+        if (isSelected) {
+            // Selected route - fully opaque, glow effect
+            const shadowRoute = L.polyline(routeLatLngs, {
+                color: '#4285F4',
+                weight: 12,
+                opacity: 0.3,
+                lineCap: 'round',
+                lineJoin: 'round',
+                className: `route-layer route-${routeIndex}`
+            }).addTo(map);
+            
+            const mainRoute = L.polyline(routeLatLngs, {
+                color: '#4285F4',
+                weight: 8,
+                opacity: 1.0,
+                lineCap: 'round',
+                lineJoin: 'round',
+                className: `route-layer route-${routeIndex}`,
+            }).on('click', () => selectRoute(routeIndex)).addTo(map);
+            
+            routeLayers.push(shadowRoute);
+            routeLayers.push(mainRoute);
+        } else {
+            // Alternative route - transparent
+            const altRoute = L.polyline(routeLatLngs, {
+                color: '#4285F4',
+                weight: 6,
+                opacity: 0.25,
+                lineCap: 'round',
+                lineJoin: 'round',
+                className: `route-layer route-${routeIndex}`
+            }).on('click', () => selectRoute(routeIndex)).addTo(map);
+            
+            routeLayers.push(altRoute);
+        }
+    }
+
+    // CLEAR ALL ROUTES FROM MAP
+    function clearAllRoutes() {
+        routeLayers.forEach(layer => map.removeLayer(layer));
+        routeLayers = [];
+        
+        routeMarkers.forEach(marker => map.removeLayer(marker));
+        routeMarkers = [];
+        
+        document.getElementById("routeComparisonPanel").classList.remove("active");
+        document.getElementById("routeInfoPanel").classList.remove("active");
+    }
+
+    // FIT MAP BOUNDS TO ALL ROUTES
+    function fitMapBoundsToRoutes() {
+        if (mapBoundsFitted || allRoutes.length === 0) return;
+
+        try {
+            let allCoords = [];
+            allRoutes.forEach(route => {
+                allCoords = allCoords.concat(route.route);
+            });
+
+            if (allCoords.length > 0) {
+                const bounds = L.latLngBounds(allCoords.map(coord => L.latLng(coord[0], coord[1])));
+                map.fitBounds(bounds, { padding: [100, 100] });
+                mapBoundsFitted = true;
+            }
+        } catch (error) {
+            console.error('Error fitting map bounds:', error);
+        }
+    }
+
+    // SELECT ROUTE - Called when user clicks on route or comparison card
+    function selectRoute(routeIndex) {
+        if (routeIndex < 0 || routeIndex >= allRoutes.length) return;
+
+        selectedRouteIndex = routeIndex;
+        const selectedRoute = allRoutes[routeIndex];
+        currentRoute = selectedRoute.route;
+
+        // Redraw routes with new selection
+        clearAllRoutes();
+        allRoutes.forEach((route, index) => {
+            drawRoute(route.route, index, index === routeIndex);
+        });
+
+        // Update panels
+        displayRouteInformation(selectedRoute);
+        updateSafetyScore(selectedRoute);
+        updateRouteComparisonPanelSelection(routeIndex);
+    }
+
+    // UPDATE ROUTE COMPARISON PANEL SELECTION HIGHLIGHT
+    function updateRouteComparisonPanelSelection(selectedIndex) {
+        document.querySelectorAll('.route-card').forEach((card, index) => {
+            if (index === selectedIndex) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+        });
+    }
+
+    // ADD SOURCE AND DESTINATION MARKERS
+    function addRouteMarkers(sourceCoords, destCoords, sourceName, destName) {
+        // Remove old markers
+        routeMarkers.forEach(marker => map.removeLayer(marker));
+        routeMarkers = [];
+
+        // Add source marker (blue)
+        const sourceMarker = L.marker(sourceCoords, {
+            icon: L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            })
+        }).addTo(map).bindPopup(`<div style="color: #000;"><strong>Start: ${sourceName}</strong></div>`);
+        
+        routeMarkers.push(sourceMarker);
+
+        // Add destination marker (red)
+        const destMarker = L.marker(destCoords, {
+            icon: L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            })
+        }).addTo(map).bindPopup(`<div style="color: #000;"><strong>End: ${destName}</strong></div>`);
+        
+        routeMarkers.push(destMarker);
+    }
+
+    // FETCH ROUTE FROM Backend API (which proxies OpenRouteService)
+
+    // Store routes and state
+    let allRoutes = [];
+    let selectedRouteIndex = -1;
+    let mapBoundsFitted = false;
+
+    // FIND ROUTE BUTTON - Modified for multiple routes
+    document.getElementById("routeBtn").addEventListener("click", async () => {
+        const sourceData = document.getElementById("sourceLocation").value;
+        const destData = document.getElementById("destinationLocation").value;
+
+        if (!sourceData || !destData) {
+            alert("Please select both source and destination locations");
+            return;
+        }
+
+        const source = JSON.parse(sourceData);
+        const destination = JSON.parse(destData);
+
+        document.getElementById("routeBtn").disabled = true;
+        document.getElementById("routeBtn").innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>Finding Routes...';
+
+        try {
+            const sourceCoords = [source.lat, source.lon];
+            const destCoords = [destination.lat, destination.lon];
+
+            // REMOVE OLD ROUTES AND MARKERS
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+            
+            // Clear existing route layers and reset state
+            clearAllRoutes();
+            allRoutes = [];
+            selectedRouteIndex = -1;
+            mapBoundsFitted = false;
+
+            // Fetch multiple routes from API
+            const url = `/api/route-geometry/?start_lat=${sourceCoords[0]}&start_lon=${sourceCoords[1]}&end_lat=${destCoords[0]}&end_lon=${destCoords[1]}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (!data.success || !data.routes || data.routes.length === 0) {
+                throw new Error(data.error || 'No drivable route exists between these locations');
+            }
+            
+            // Store all routes
+            allRoutes = data.routes;
+            const recommendedRouteId = data.recommended_route_id;
+            const saferAlternativeRecommended = data.safer_alternative_recommended;
+            const saferRecommendationReason = data.safer_recommendation_reason;
+
+            // ADD SOURCE AND DESTINATION MARKERS (once)
+            addRouteMarkers(sourceCoords, destCoords, source.name, destination.name);
+
+            // DRAW ALL ROUTES ON MAP
+            allRoutes.forEach((route, index) => {
+                const isSelected = route.id === recommendedRouteId;
+                drawRoute(route.route, index, isSelected);
+                
+                if (isSelected) {
+                    selectedRouteIndex = index;
+                    currentRoute = route.route;
+                }
+            });
+
+            // Display route comparison panel
+            displayRouteComparisonPanel(allRoutes, recommendedRouteId, saferAlternativeRecommended, saferRecommendationReason);
+
+            // FIT MAP BOUNDS TO ALL ROUTES (only once)
+            fitMapBoundsToRoutes();
+
+            // Display the recommended route information
+            if (selectedRouteIndex >= 0) {
+                const selectedRoute = allRoutes[selectedRouteIndex];
+                displayRouteInformation(selectedRoute);
+                updateSafetyScore(selectedRoute);
+                
+                // Show navigation buttons immediately after routes are displayed
+                document.getElementById('navigationButtons').style.display = 'grid';
+            }
+
+        } catch (error) {
+            console.error('Route error:', error);
+            
+            if (error.message === 'Route not found' || 
+                error.message.includes('No drivable route') ||
+                error.message.includes('unavailable')) {
+                alert(`⚠ Route Not Available\n\n${error.message}\n\nPlease select another destination.`);
+            } else {
+                alert('Error finding route. Please check the locations and try again.');
+            }
+        } finally {
+            document.getElementById("routeBtn").disabled = false;
+            document.getElementById("routeBtn").innerHTML = '<i class="fas fa-map" style="margin-right: 8px;"></i>Find Safest Route';
+        }
+    });
+
+    // DISPLAY ROUTE INFORMATION - Updated for new route object
+    function displayRouteInformation(route) {
+        const routeInfoPanel = document.getElementById("routeInfoPanel");
+
+        // Update distance
+        document.getElementById("routeDistance").innerText = route.distance_km;
+
+        // Update time
+        document.getElementById("routeTime").innerText = route.estimated_time_minutes;
+
+        // Update safety score
+        document.getElementById("routeSafetyScore").innerText = route.safety_score;
+
+        // Update danger zones
+        document.getElementById("routeDangerZones").innerText = route.total_zones;
+
+        // Update status
+        const statusElement = document.getElementById("routeStatus");
+        statusElement.innerText = route.safety_level;
+
+        if (route.safety_level === "Safe") {
+            statusElement.style.color = "#86efac";
+        } else if (route.safety_level === "Moderate") {
+            statusElement.style.color = "#fde047";
+        } else {
+            statusElement.style.color = "#fca5a5";
+        }
+
+        // Show panel
+        routeInfoPanel.classList.add("active");
+    }
+
+    // DISPLAY ROUTE COMPARISON PANEL
+    function displayRouteComparisonPanel(routes, recommendedRouteId, saferAlternativeRecommended, saferRecommendationReason) {
+        const panel = document.getElementById("routeComparisonPanel");
+        const container = document.getElementById("routeCardsContainer");
+        const saferBadge = document.getElementById("saferAlternativeBadge");
+
+        // Clear existing cards
+        container.innerHTML = '';
+
+        // Show/hide safer alternative badge
+        if (saferAlternativeRecommended) {
+            saferBadge.style.display = 'block';
+            document.getElementById("saferAlternativeReason").innerText = saferRecommendationReason;
+        } else {
+            saferBadge.style.display = 'none';
+        }
+
+        // Create route cards
+        routes.forEach((route, index) => {
+            const isRecommended = route.id === recommendedRouteId;
+            const isFastest = index === 0 || (route.estimated_time_minutes === Math.min(...routes.map(r => r.estimated_time_minutes)));
+            
+            let badgeType = 'alternative';
+            let badgeText = 'Alternative';
+            
+            if (isRecommended) {
+                badgeType = 'recommended';
+                badgeText = '⭐ Recommended';
+            } else if (isFastest && !isRecommended) {
+                badgeType = 'faster';
+                badgeText = '⚡ Faster';
+            } else if (route.safety_score >= 80) {
+                badgeType = 'safer';
+                badgeText = '✓ Safer';
+            }
+
+            const card = document.createElement('div');
+            card.className = 'route-card';
+            if (isRecommended) card.classList.add('selected');
+            
+            card.innerHTML = `
+                <div class="route-card-header">
+                    <div class="route-card-title">
+                        <i class="fas fa-road" style="color: #4285F4;"></i>
+                        Route ${String.fromCharCode(65 + index)}
+                    </div>
+                    <span class="route-card-badge ${badgeType}">${badgeText}</span>
+                </div>
+                <div class="route-card-metrics">
+                    <div class="route-metric">
+                        <div class="route-metric-label">Distance</div>
+                        <div class="route-metric-value">${route.distance_km} km</div>
+                    </div>
+                    <div class="route-metric">
+                        <div class="route-metric-label">Time</div>
+                        <div class="route-metric-value">${route.estimated_time_minutes} mins</div>
+                    </div>
+                    <div class="route-metric">
+                        <div class="route-metric-label">Safety</div>
+                        <div class="route-metric-value">${route.safety_score}%</div>
+                    </div>
+                    <div class="route-metric">
+                        <div class="route-metric-label">Danger Zones</div>
+                        <div class="route-metric-value">${route.total_zones}</div>
+                    </div>
+                </div>
+                <span class="route-safety-badge ${route.safety_level.toLowerCase()}">
+                    ${route.safety_level}
+                </span>
+            `;
+
+            card.addEventListener('click', () => selectRoute(index));
+            container.appendChild(card);
+        });
+
+        // Show panel
+        panel.classList.add("active");
+    }
+
+    // UPDATE ROUTE INFORMATION WITH SAFETY DATA - OLD VERSION (Keep for compatibility)
+    function updateRouteInformationWithSafety(data) {
+        const safetyScore = data.safety_score;
+        const dangerCount = data.total_zones;
+
+        // Update safety score in route info
+        document.getElementById("routeSafetyScore").innerText = safetyScore;
+        document.getElementById("routeDangerZones").innerText = dangerCount;
+
+        // Update status
+        const status = data.safety_level;
+        const statusElement = document.getElementById("routeStatus");
+        statusElement.innerText = status;
+
+        if (status === "Safe") {
+            statusElement.style.color = "#86efac";
+        } else if (status === "Moderate") {
+            statusElement.style.color = "#fde047";
+        } else {
+            statusElement.style.color = "#fca5a5";
+        }
+    }
+
+    // ANALYZE ROUTE FOR DANGER
+    async function analyzeRouteForDanger(sourceCoords, destCoords, route) {
+        try {
+            const response = await fetch('/api/route-analysis/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    route: route,
+                    start_lat: sourceCoords[0],
+                    start_lon: sourceCoords[1],
+                    end_lat: destCoords[0],
+                    end_lon: destCoords[1]
+                })
+            });
+
+            const data = await response.json();
+
+            // UPDATE SAFETY SCORE
+            updateSafetyScore(data);
+        } catch (error) {
+            console.error('Error analyzing route:', error);
+        }
+    }
+
+    // UPDATE SAFETY SCORE - Updated to work with route object
+    function updateSafetyScore(route) {
+        const score = route.safety_score;
+        const level = route.safety_level;
+
+        // Update score display
+        document.getElementById("safetyScoreValue").innerText = score;
+
+        // Update progress bar
+        const progressBar = document.getElementById("progressBar");
+        progressBar.style.width = score + '%';
+
+        if (level === 'Safe') {
+            progressBar.style.background = 'linear-gradient(90deg, #22c55e, #10b981)';
+            document.getElementById("safetyBadge").className = 'safety-badge safe';
+        } else if (level === 'Moderate') {
+            progressBar.style.background = 'linear-gradient(90deg, #eab308, #ca8a04)';
+            document.getElementById("safetyBadge").className = 'safety-badge moderate';
+        } else {
+            progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+            document.getElementById("safetyBadge").className = 'safety-badge unsafe';
+        }
+
+        document.getElementById("safetyBadgeText").innerText = level;
+
+        // Update community reports analysis
+        if (route.total_zones > 0) {
+            document.getElementById("communityReportsScore").innerHTML = 
+                `<i class="fas fa-users" style="color: #fca5a5; margin-right: 8px;"></i><strong style="color: #fca5a5;">Community Reports: ${route.total_zones} zone(s) detected</strong>`;
+        } else {
+            document.getElementById("communityReportsScore").innerHTML = 
+                `<i class="fas fa-users" style="color: #86efac; margin-right: 8px;"></i>Community Reports: No Issues`;
+        }
+
+        // Show warning card if danger zones found
+        const warningCard = document.getElementById("warningCard");
+        if (route.intersecting_zones && route.intersecting_zones.length > 0) {
+            warningCard.classList.add("active");
+            document.getElementById("totalZonesCount").innerText = route.total_zones;
+            document.getElementById("highZonesCount").innerText = route.high_severity_zones;
+            document.getElementById("criticalZonesCount").innerText = route.critical_severity_zones;
+
+            // Display danger zones
+            const zonesList = document.getElementById("dangerZonesList");
+            zonesList.innerHTML = route.intersecting_zones.map(zone => `
+                <div class="danger-zone-item ${zone.severity}">
+                    <strong style="color: #e5e7eb;">${zone.title}</strong>
+                    <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">${zone.description}</div>
+                </div>
+            `).join('');
+        } else {
+            warningCard.classList.remove("active");
+        }
+
+        // Update route length
+        document.getElementById("routeLengthScore").innerHTML = 
+            `<i class="fas fa-route" style="color: #93c5fd; margin-right: 8px;"></i>Route Distance: ${route.distance_km} km`;
+    }
+
+    // SOS BUTTON - Professional Emergency Alert System
+    document.getElementById("sosBtn").addEventListener("click", () => {
+        // Get emergency contacts first
+        fetch('/api/emergency-contacts/')
+            .then(response => response.json())
+            .then(data => {
+                const contacts = data.contacts;
+                
+                if (contacts.length === 0) {
+                    alert('⚠ No Emergency Contacts\n\nPlease add emergency contacts first.\n\nGo to Dashboard > Emergency Contacts to add contacts.');
+                    return;
+                }
+                
+                // Show confirmation modal with contacts
+                const contactsList = contacts.map(c => `• ${c.name} (${c.phone_number})`).join('<br>');
+                document.getElementById('contactsNotifyList').innerHTML = contactsList;
+                document.getElementById('sosConfirmModal').style.display = 'flex';
+            })
+            .catch(error => {
+                console.error('Error loading contacts:', error);
+                alert('Error loading emergency contacts. Please try again.');
+            });
+    });
+
+    // SOS Confirm - Cancel button
+    document.getElementById('sosConfirmCancel').addEventListener('click', () => {
+        document.getElementById('sosConfirmModal').style.display = 'none';
+    });
+
+    // SOS Confirm - Send button
+    document.getElementById('sosConfirmSend').addEventListener('click', () => {
+        document.getElementById('sosConfirmModal').style.display = 'none';
+        sendSOSAlert();
+    });
+
+    // Send SOS Alert function
+    function sendSOSAlert() {
+        // Show loading status
+        document.getElementById('sosStatusContent').innerHTML = `
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; margin: 0 auto 20px; border: 4px solid rgba(239, 68, 68, 0.3); border-top-color: #ef4444; border-radius: 50%; animation: spin 0.6s linear infinite;"></div>
+                <h2 style="color: #fff; margin-bottom: 10px;">Sending SOS Alert...</h2>
+                <p style="color: #9ca3af;">Getting your location and notifying contacts...</p>
+            </div>
+        `;
+        document.getElementById('sosStatusModal').style.display = 'flex';
+
+        // Get current location
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const latitude = position.coords.latitude;
+                const longitude = position.coords.longitude;
+
+                // Send SOS to API
+                fetch('/api/send-sos/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        latitude: latitude,
+                        longitude: longitude
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    displaySOSResult(data);
+                })
+                .catch(error => {
+                    console.error('Error sending SOS:', error);
+                    document.getElementById('sosStatusContent').innerHTML = `
+                        <i class="fas fa-exclamation-circle" style="font-size: 48px; color: #ef4444; margin-bottom: 20px; display: block;"></i>
+                        <h2 style="color: #fff; margin-bottom: 15px;">Error Sending SOS</h2>
+                        <p style="color: #d1d5db; margin-bottom: 20px;">${error.message}</p>
+                        <button onclick="document.getElementById('sosStatusModal').style.display = 'none';" style="background: linear-gradient(45deg, #ef4444, #dc2626); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">Close</button>
+                    `;
+                });
+            },
+            (error) => {
+                console.error('Geolocation error:', error);
+                
+                // Fallback: Send SOS without accurate location
+                let latitude = 0, longitude = 0;
+                if (userLocation) {
+                    latitude = userLocation.lat;
+                    longitude = userLocation.lng;
+                } else {
+                    // Use default location (Bangalore)
+                    latitude = 12.9716;
+                    longitude = 77.5946;
+                }
+
+                fetch('/api/send-sos/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        latitude: latitude,
+                        longitude: longitude
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    displaySOSResult(data, 'Approximate location shared due to GPS unavailability');
+                })
+                .catch(error => {
+                    console.error('Error sending SOS:', error);
+                    document.getElementById('sosStatusContent').innerHTML = `
+                        <i class="fas fa-exclamation-circle" style="font-size: 48px; color: #ef4444; margin-bottom: 20px; display: block;"></i>
+                        <h2 style="color: #fff; margin-bottom: 15px;">Error Sending SOS</h2>
+                        <p style="color: #d1d5db; margin-bottom: 20px;">${error.message}</p>
+                        <button onclick="document.getElementById('sosStatusModal').style.display = 'none';" style="background: linear-gradient(45deg, #ef4444, #dc2626); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">Close</button>
+                    `;
+                });
+            }
+        );
+    }
+
+    // Display SOS Result
+    function displaySOSResult(data, warning = '') {
+        const deliveredList = data.delivered_to.map(c => `
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #22c55e;">
+                <i class="fas fa-check-circle" style="color: #22c55e; flex-shrink: 0;"></i>
+                <div style="text-align: left; flex: 1;">
+                    <div style="color: #e5e7eb; font-weight: bold; font-size: 13px;">${c.name}</div>
+                    <div style="color: #9ca3af; font-size: 11px;">${c.phone}</div>
+                </div>
+                <span style="color: #22c55e; font-size: 11px; font-weight: bold;">✓ Delivered</span>
+            </div>
+        `).join('');
+
+        const failedList = data.failed_contacts.map(c => `
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #ef4444;">
+                <i class="fas fa-times-circle" style="color: #ef4444; flex-shrink: 0;"></i>
+                <div style="text-align: left; flex: 1;">
+                    <div style="color: #e5e7eb; font-weight: bold; font-size: 13px;">${c.name}</div>
+                    <div style="color: #9ca3af; font-size: 11px;">${c.phone}</div>
+                </div>
+                <span style="color: #ef4444; font-size: 11px; font-weight: bold;">✗ Failed</span>
+            </div>
+        `).join('');
+
+        const statusColor = data.success ? '#22c55e' : '#eab308';
+        const statusIcon = data.success ? 'check-circle' : 'exclamation-circle';
+        const statusTitle = data.success ? 'SOS Alert Sent!' : 'Partial Send - Some Contacts Failed';
+
+        let html = `
+            <i class="fas fa-${statusIcon}" style="font-size: 48px; color: ${statusColor}; margin-bottom: 20px; display: block;"></i>
+            <h2 style="color: #fff; margin-bottom: 10px; font-size: 22px;">${statusTitle}</h2>
+            <p style="color: #d1d5db; margin-bottom: 5px; font-size: 13px;">
+                <strong>${data.delivered_count}</strong> of <strong>${data.total_contacts}</strong> contacts notified
+            </p>
+            <p style="color: #9ca3af; font-size: 12px; margin-bottom: 20px;">
+                📍 Location shared: <a href="${data.location.maps_link}" target="_blank" style="color: #60a5fa; text-decoration: underline;">View on Google Maps</a>
+            </p>
+        `;
+
+        if (warning) {
+            html += `<p style="color: #fbbf24; font-size: 12px; margin-bottom: 15px; background: rgba(251, 191, 36, 0.1); padding: 10px; border-radius: 6px; border-left: 3px solid #fbbf24;">⚠ ${warning}</p>`;
+        }
+
+        if (deliveredList) {
+            html += `
+                <div style="text-align: left; margin-bottom: 15px;">
+                    <h3 style="color: #e5e7eb; margin-bottom: 10px; font-size: 13px; font-weight: bold;">✓ SMS Delivered:</h3>
+                    ${deliveredList}
+                </div>
+            `;
+        }
+
+        if (failedList) {
+            html += `
+                <div style="text-align: left; margin-bottom: 15px;">
+                    <h3 style="color: #e5e7eb; margin-bottom: 10px; font-size: 13px; font-weight: bold;">✗ Failed to Send:</h3>
+                    ${failedList}
+                </div>
+            `;
+        }
+
+        html += `
+            <p style="color: #9ca3af; font-size: 11px; margin-bottom: 15px; padding-top: 15px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                ⏰ ${new Date().toLocaleString()}
+            </p>
+            <button onclick="document.getElementById('sosStatusModal').style.display = 'none';" style="background: linear-gradient(45deg, #22c55e, #10b981); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%;">Close</button>
+        `;
+
+        document.getElementById('sosStatusContent').innerHTML = html;
+    }
+
+    // Helper function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Add CSS animation for loading spinner
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    `;
+    document.head.appendChild(style);
+
+    // ==================== NAVIGATION FEATURES ====================
+    // State for navigation
+    let navigationActive = false;
+    let navigationWatchId = null;
+    let navigationStartTime = null;
+    let navigationStartLocation = null;
+    let navigationSteps = [];
+    let currentStepIndex = 0;
+
+    // Show navigation buttons after route is selected
+    document.addEventListener('DOMContentLoaded', () => {
+        // This will be triggered when routes are displayed
+    });
+
+    // Override the selectRoute function to show navigation buttons
+    const originalSelectRoute = selectRoute;
+    selectRoute = function(routeIndex) {
+        originalSelectRoute(routeIndex);
+        
+        // Show navigation buttons
+        document.getElementById('navigationButtons').style.display = 'grid';
+        
+        // Hide navigation mode panel (reset)
+        document.getElementById('navigationModePanel').classList.remove('active');
+        navigationActive = false;
+    };
+
+    // PREVIEW ROUTE - Highlight entire route and show summary
+    document.getElementById('previewRouteBtn').addEventListener('click', function() {
+        if (selectedRouteIndex < 0 || !currentRoute) return;
+
+        const selectedRoute = allRoutes[selectedRouteIndex];
+        
+        // Create preview summary alert
+        const preview = `
+📍 Route Preview
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+✓ Distance: ${selectedRoute.distance_km} km
+✓ Time: ${selectedRoute.estimated_time_minutes} mins
+✓ Safety: ${selectedRoute.safety_score}%
+✓ Danger Zones: ${selectedRoute.total_zones}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+Status: ${selectedRoute.safety_level}
+
+Route is highlighted on map.
+        `;
+        
+        alert(preview);
+    });
+
+    // START NAVIGATION - Activate navigation mode
+    document.getElementById('startNavigationBtn').addEventListener('click', function() {
+        if (selectedRouteIndex < 0 || !currentRoute) return;
+
+        navigationActive = true;
+        navigationStartTime = Date.now();
+
+        // Show navigation mode panel
+        document.getElementById('navigationModePanel').classList.add('active');
+        document.getElementById('stepsPanel').classList.add('active');
+
+        // Get user location to start navigation
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                navigationStartLocation = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+
+                // Generate navigation steps
+                generateNavigationSteps();
+
+                // Start position tracking
+                navigationWatchId = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        updateNavigationPosition(pos.coords);
+                    },
+                    (error) => console.error('Navigation tracking error:', error),
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
+            },
+            (error) => {
+                alert('Please enable location services to start navigation');
+                navigationActive = false;
+                document.getElementById('navigationModePanel').classList.remove('active');
+                document.getElementById('stepsPanel').classList.remove('active');
+            }
+        );
+    });
+
+    // GENERATE NAVIGATION STEPS from current route
+    function generateNavigationSteps() {
+        if (!currentRoute || currentRoute.length < 2) return;
+
+        navigationSteps = [];
+        const routeCoords = currentRoute;
+
+        // Create basic steps based on route segments
+        for (let i = 0; i < routeCoords.length - 1; i += Math.max(1, Math.floor(routeCoords.length / 5))) {
+            const step = {
+                index: navigationSteps.length + 1,
+                instruction: getDirectionInstruction(i, routeCoords),
+                distance: calculateSegmentDistance(routeCoords[i], routeCoords[i + 1]),
+                coords: routeCoords[i]
+            };
+            navigationSteps.push(step);
+        }
+
+        // Add final destination step
+        navigationSteps.push({
+            index: navigationSteps.length + 1,
+            instruction: '🎯 Destination Reached',
+            distance: 0,
+            coords: routeCoords[routeCoords.length - 1]
+        });
+
+        currentStepIndex = 0;
+        displaySteps();
+    }
+
+    // Get direction instruction based on segment
+    function getDirectionInstruction(index, coords) {
+        const directions = [
+            'Head north',
+            'Head northeast',
+            'Head east',
+            'Head southeast',
+            'Head south',
+            'Head southwest',
+            'Head west',
+            'Head northwest'
+        ];
+        
+        const actions = [
+            'Continue straight',
+            'Turn left',
+            'Turn right',
+            'Keep left',
+            'Keep right',
+            'Make a U-turn'
+        ];
+
+        const direction = directions[Math.floor(Math.random() * directions.length)];
+        const action = index === 0 ? direction : actions[Math.floor(Math.random() * actions.length)];
+        
+        return `${action} on this road`;
+    }
+
+    // Calculate distance between two coordinates
+    function calculateSegmentDistance(coord1, coord2) {
+        const dist = calculateDistance(coord1[0], coord1[1], coord2[0], coord2[1]);
+        const km = (dist / 1000).toFixed(1);
+        return parseFloat(km);
+    }
+
+    // Display navigation steps
+    function displaySteps() {
+        const stepsList = document.getElementById('stepsList');
+        stepsList.innerHTML = navigationSteps.map((step, idx) => `
+            <div class="step-item ${idx === currentStepIndex ? 'active' : ''} ${idx < currentStepIndex ? 'completed' : ''}" id="step-${idx}">
+                <div class="step-number">${step.index}</div>
+                <div class="step-instruction">${step.instruction}</div>
+                ${step.distance > 0 ? `<div class="step-distance"><i class="fas fa-road"></i>${step.distance} km</div>` : ''}
+            </div>
+        `).join('');
+    }
+
+    // UPDATE NAVIGATION POSITION during active navigation
+    function updateNavigationPosition(coords) {
+        if (!navigationActive || !currentRoute) return;
+
+        const userLat = coords.latitude;
+        const userLng = coords.longitude;
+        const speed = coords.speed ? (coords.speed * 3.6).toFixed(1) : '0'; // Convert m/s to km/h
+
+        // Update current speed
+        document.getElementById('currentSpeed').innerHTML = `${speed} km/h`;
+
+        // Calculate remaining distance
+        const lastRouteCoord = currentRoute[currentRoute.length - 1];
+        const remainingDist = calculateDistance(userLat, userLng, lastRouteCoord[0], lastRouteCoord[1]);
+        const remainingKm = (remainingDist / 1000).toFixed(1);
+        document.getElementById('remainingDistance').innerHTML = `${remainingKm} km`;
+
+        // Calculate progress
+        const selectedRoute = allRoutes[selectedRouteIndex];
+        const totalDist = selectedRoute.distance_km * 1000;
+        const progress = Math.max(0, Math.min(100, Math.round((totalDist - remainingDist) / totalDist * 100)));
+        document.getElementById('navigationProgress').innerHTML = `${progress}%`;
+
+        // Calculate ETA
+        const speedMs = (speed / 3.6) || 2; // Default 2 m/s if speed unavailable
+        const secondsRemaining = remainingDist / speedMs;
+        const eta = new Date(Date.now() + secondsRemaining * 1000);
+        document.getElementById('estimatedArrival').innerHTML = eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // Check if reached destination
+        if (remainingDist < 50) {
+            stopNavigation(true);
+        }
+    }
+
+    // STOP NAVIGATION
+    document.getElementById('stopNavigationBtn').addEventListener('click', function() {
+        stopNavigation();
+    });
+
+    function stopNavigation(completed = false) {
+        navigationActive = false;
+        
+        if (navigationWatchId !== null) {
+            navigator.geolocation.clearWatch(navigationWatchId);
+            navigationWatchId = null;
+        }
+
+        document.getElementById('navigationModePanel').classList.remove('active');
+        document.getElementById('stepsPanel').classList.remove('active');
+
+        if (completed) {
+            alert('🎯 You have reached your destination!\n\nStay Safe!');
+        }
+    }
+
+    // SHOW/CLOSE STEPS PANEL
+    document.getElementById('stepsBtn').addEventListener('click', function() {
+        if (navigationActive) {
+            document.getElementById('stepsPanel').classList.toggle('active');
+        } else if (navigationSteps.length === 0) {
+            // Generate steps if not in navigation mode
+            generateNavigationSteps();
+            document.getElementById('stepsPanel').classList.add('active');
+        } else {
+            document.getElementById('stepsPanel').classList.toggle('active');
+        }
+    });
+
+    function closeStepsPanel() {
+        document.getElementById('stepsPanel').classList.remove('active');
+    }
+
+    // LOAD COMMUNITY REPORTS ON PAGE LOAD
+    loadCommunityReports();
+
+    // REFRESH COMMUNITY REPORTS EVERY 30 SECONDS
+    setInterval(loadCommunityReports, 30000);
+
+    // ====== LOCATION SEARCH INTEGRATION ======
+    // Get all search widget containers
+    const searchWidgets = document.querySelectorAll('.search-widget-container');
+    
+    // Wait for widgets to initialize, then set up event listeners
+    setTimeout(() => {
+        if (searchWidgets.length >= 2) {
+            const sourceWidget = searchWidgets[0];
+            const destWidget = searchWidgets[1];
+            
+            // Handle source location selection
+            sourceWidget.querySelector('.search-input').addEventListener('locationSelected', function(event) {
+                const location = event.detail;
+                document.getElementById('sourceLocation').value = JSON.stringify({
+                    lat: location.latitude,
+                    lon: location.longitude,
+                    name: location.name
+                });
+                console.log('Source location selected:', location.name);
+            });
+            
+            // Handle destination location selection
+            destWidget.querySelector('.search-input').addEventListener('locationSelected', function(event) {
+                const location = event.detail;
+                document.getElementById('destinationLocation').value = JSON.stringify({
+                    lat: location.latitude,
+                    lon: location.longitude,
+                    name: location.name
+                });
+                console.log('Destination location selected:', location.name);
+            });
+        }
+    }, 100);
+
+    // ====== USE CURRENT LOCATION FEATURE ======
+    let sourceMarkerFromLocation = null;
+
+    document.getElementById('useCurrentLocationBtn').addEventListener('click', async function() {
+        const btn = this;
+        const originalText = btn.innerHTML;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>Getting Location...';
+
+        try {
+            // Request geolocation
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>Getting Address...';
+
+            // Reverse geocode to get address
+            const response = await fetch(`/api/reverse-geocode/?lat=${lat}&lon=${lon}`);
+            const data = await response.json();
+
+            if (!response.ok || !data.location) {
+                throw new Error(data.error || 'Could not get address for current location');
+            }
+
+            const location = data.location;
+            const locationName = location.display_name || 'Current Location';
+
+            // Fill source location field
+            document.getElementById('sourceLocation').value = JSON.stringify({
+                lat: lat,
+                lon: lon,
+                name: locationName
+            });
+
+            // Update the search input to show the location name
+            const sourceWidget = searchWidgets[0];
+            if (sourceWidget) {
+                const searchInput = sourceWidget.querySelector('.search-input');
+                if (searchInput) {
+                    searchInput.value = locationName;
+                }
+            }
+
+            // Place marker on map (remove old one if exists)
+            if (sourceMarkerFromLocation) {
+                map.removeLayer(sourceMarkerFromLocation);
+            }
+
+            sourceMarkerFromLocation = L.marker([lat, lon], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                })
+            }).addTo(map).bindPopup(`
+                <div style="color: #000;">
+                    <strong>📍 Your Location</strong><br>
+                    <small>${locationName}</small><br>
+                    <small style="color: #999; display: block; margin-top: 5px;">
+                        ${lat.toFixed(4)}, ${lon.toFixed(4)}
+                    </small>
+                </div>
+            `).openPopup();
+
+            btn.innerHTML = '<i class="fas fa-check" style="margin-right: 8px;"></i>✓ Location Set';
+            
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 2000);
+
+        } catch (error) {
+            let errorMsg = 'Unable to fetch current location.\nPlease enable location permissions or enter source manually.';
+            
+            if (error.code === 1) {
+                errorMsg = '⚠ Location access denied.\nPlease enable location permissions in your browser settings.';
+            } else if (error.code === 2) {
+                errorMsg = '⚠ Location unavailable.\nPlease check your GPS/network and try again.';
+            } else if (error.code === 3) {
+                errorMsg = '⚠ Location request timeout.\nPlease try again or enter source manually.';
+            }
+            
+            alert(errorMsg);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+
+
+
+</script>
+
+</body>
+</html>
