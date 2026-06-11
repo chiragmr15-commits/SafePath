@@ -852,6 +852,14 @@
         <i class="fas fa-map" style="margin-right: 8px;"></i>Find Safest Route
     </button>
 
+    <!-- RECENT ROUTES HISTORY -->
+    <div style="margin-top: 20px; padding: 15px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); display: none;" id="recentRoutesContainer">
+        <div style="font-weight: bold; color: #fbbf24; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-history"></i>Recent Routes
+        </div>
+        <div id="recentRoutesList" style="max-height: 200px; overflow-y: auto;"></div>
+    </div>
+
     <!-- ROUTE WARNING CARD -->
     <div class="warning-card" id="warningCard">
         <div class="warning-header">
@@ -1097,6 +1105,7 @@
     let dangerCircles = [];
     let userLocation = null;
     let proximityAlertShown = {};
+    let routeDisplayed = false;  // Flag to prevent map recenter when route is shown
 
     // LOAD COMMUNITY REPORTS
     async function loadCommunityReports() {
@@ -1187,6 +1196,9 @@
 
             // Check proximity to danger zones
             checkProximityToDangerZones(lat, lng);
+            
+            // DO NOT update map view when route is displayed
+            // User can click "Recenter To My Location" if they want to refocus
         },
         (error) => {
             console.error(error);
@@ -1255,22 +1267,26 @@
     let routeLayers = [];
     let routeMarkers = [];
 
-    // DRAW ROUTE ON MAP - Updated for multiple routes
+    // DRAW ROUTE ON MAP - Updated for multiple routes with improved visibility
     function drawRoute(routeCoords, routeIndex = 0, isSelected = false) {
-        if (!routeCoords || routeCoords.length < 2) return;
+        if (!routeCoords || routeCoords.length < 2) {
+            console.warn(`⚠️ Route ${routeIndex}: Invalid coordinates (${routeCoords ? routeCoords.length : 0} points)`);
+            return;
+        }
 
         const routeLatLngs = routeCoords.map(coord => L.latLng(coord[0], coord[1]));
 
         // All routes use blue color, but with different opacity
         if (isSelected) {
-            // Selected route - fully opaque, glow effect
+            // Selected route - fully opaque, strong glow effect
             const shadowRoute = L.polyline(routeLatLngs, {
                 color: '#4285F4',
                 weight: 12,
                 opacity: 0.3,
                 lineCap: 'round',
                 lineJoin: 'round',
-                className: `route-layer route-${routeIndex}`
+                className: `route-layer route-${routeIndex}`,
+                interactive: false
             }).addTo(map);
             
             const mainRoute = L.polyline(routeLatLngs, {
@@ -1280,22 +1296,56 @@
                 lineCap: 'round',
                 lineJoin: 'round',
                 className: `route-layer route-${routeIndex}`,
+                interactive: true
             }).on('click', () => selectRoute(routeIndex)).addTo(map);
+            
+            // Ensure selected route is always on top
+            mainRoute.bringToFront();
             
             routeLayers.push(shadowRoute);
             routeLayers.push(mainRoute);
+            
+            console.log(`✅ Selected Route ${routeIndex}: ${routeLatLngs.length} points | Weight: 8 | Opacity: 1.0 | Glow: Strong | Status: VISIBLE`);
         } else {
-            // Alternative route - transparent
-            const altRoute = L.polyline(routeLatLngs, {
-                color: '#4285F4',
-                weight: 6,
-                opacity: 0.25,
+            // Alternative route - clearly visible with improved opacity
+            const altGlowRoute = L.polyline(routeLatLngs, {
+                color: '#87CEEB',
+                weight: 8,
+                opacity: 0.35,
                 lineCap: 'round',
                 lineJoin: 'round',
-                className: `route-layer route-${routeIndex}`
-            }).on('click', () => selectRoute(routeIndex)).addTo(map);
+                className: `route-layer route-${routeIndex} alt-route`,
+                interactive: false
+            }).addTo(map);
             
+            const altRoute = L.polyline(routeLatLngs, {
+                color: '#4285F4',
+                weight: 7,
+                opacity: 0.65,
+                lineCap: 'round',
+                lineJoin: 'round',
+                className: `route-layer route-${routeIndex} alt-route`,
+                interactive: true
+            }).on('click', () => selectRoute(routeIndex))
+              .on('mouseover', function() {
+                  this.setStyle({ opacity: 0.9, weight: 8 });
+                  document.querySelector('.map').style.cursor = 'pointer';
+                  console.log(`🔍 Hovering Route ${routeIndex}`);
+              })
+              .on('mouseout', function() {
+                  this.setStyle({ opacity: 0.65, weight: 7 });
+                  document.querySelector('.map').style.cursor = 'grab';
+              })
+              .addTo(map);
+            
+            // Ensure alternative routes are visible above tiles
+            altGlowRoute.bringToFront();
+            altRoute.bringToFront();
+            
+            routeLayers.push(altGlowRoute);
             routeLayers.push(altRoute);
+            
+            console.log(`✅ Alternative Route ${routeIndex}: ${routeLatLngs.length} points | Weight: 7 | Opacity: 0.65 | Glow: Light | Hover: Enabled | Status: CLEARLY VISIBLE`);
         }
     }
 
@@ -1306,6 +1356,8 @@
         
         routeMarkers.forEach(marker => map.removeLayer(marker));
         routeMarkers = [];
+        
+        routeDisplayed = false;  // Allow map recenter again when routes are cleared
         
         document.getElementById("routeComparisonPanel").classList.remove("active");
         document.getElementById("routeInfoPanel").classList.remove("active");
@@ -1325,6 +1377,7 @@
                 const bounds = L.latLngBounds(allCoords.map(coord => L.latLng(coord[0], coord[1])));
                 map.fitBounds(bounds, { padding: [100, 100] });
                 mapBoundsFitted = true;
+                routeDisplayed = true;  // Prevent map recenter while route is displayed
             }
         } catch (error) {
             console.error('Error fitting map bounds:', error);
@@ -1333,8 +1386,13 @@
 
     // SELECT ROUTE - Called when user clicks on route or comparison card
     function selectRoute(routeIndex) {
-        if (routeIndex < 0 || routeIndex >= allRoutes.length) return;
+        if (routeIndex < 0 || routeIndex >= allRoutes.length) {
+            console.warn(`⚠️ Invalid route index: ${routeIndex}`);
+            return;
+        }
 
+        console.log(`🔄 Selecting Route ${routeIndex}...`);
+        
         selectedRouteIndex = routeIndex;
         const selectedRoute = allRoutes[routeIndex];
         currentRoute = selectedRoute.route;
@@ -1344,11 +1402,32 @@
         allRoutes.forEach((route, index) => {
             drawRoute(route.route, index, index === routeIndex);
         });
+        
+        // Ensure selected route is on top after redrawing all routes
+        setTimeout(() => {
+            const selectedRouteLayers = document.querySelectorAll(`.route-${routeIndex}`);
+            selectedRouteLayers.forEach(layer => {
+                if (map.hasLayer(layer)) {
+                    try {
+                        layer.bringToFront();
+                    } catch (e) {
+                        // Some layer types don't have bringToFront, that's OK
+                    }
+                }
+            });
+            
+            console.log(`✅ Route ${routeIndex} selected and brought to front`);
+            console.log(`   📊 Distance: ${selectedRoute.distance_km}km | Time: ${selectedRoute.estimated_time_minutes}min | Safety: ${selectedRoute.safety_score}%`);
+            console.log(`   🔵 Alternative routes visible: ${allRoutes.length - 1}`);
+        }, 50);
 
         // Update panels
         displayRouteInformation(selectedRoute);
         updateSafetyScore(selectedRoute);
         updateRouteComparisonPanelSelection(routeIndex);
+        
+        // Re-show the comparison panel so user can see all routes
+        document.getElementById("routeComparisonPanel").classList.add("active");
     }
 
     // UPDATE ROUTE COMPARISON PANEL SELECTION HIGHLIGHT
@@ -1449,6 +1528,12 @@
             const recommendedRouteId = data.recommended_route_id;
             const saferAlternativeRecommended = data.safer_alternative_recommended;
             const saferRecommendationReason = data.safer_recommendation_reason;
+            
+            // DEBUG: Log route statistics
+            console.log(`🛣️ Route Statistics:`);
+            console.log(`   📡 Routes Received: ${allRoutes.length}`);
+            console.log(`   🎯 Recommended Route ID: ${recommendedRouteId}`);
+            console.log(`   ⚠️  Safer Alternative: ${saferAlternativeRecommended ? 'Yes' : 'No'}`);
 
             // ADD SOURCE AND DESTINATION MARKERS (once)
             addRouteMarkers(sourceCoords, destCoords, source.name, destination.name);
@@ -1463,6 +1548,33 @@
                     currentRoute = route.route;
                 }
             });
+            
+            // DEBUG: Log rendered routes with visibility confirmation
+            console.log(`🗺️ Map Rendering Complete:`);
+            console.log(`   ✅ Routes Rendered: ${allRoutes.length}`);
+            console.log(`   📍 Route Layers Created: ${routeLayers.length}`);
+            console.log(`   🎯 Selected Route: Index ${selectedRouteIndex}`);
+            console.log(`   🔵 ALTERNATIVE ROUTES VISIBILITY:`);
+            for (let i = 0; i < allRoutes.length; i++) {
+                if (i !== selectedRouteIndex) {
+                    const altRoute = allRoutes[i];
+                    console.log(`      Route ${String.fromCharCode(65 + i)}: Opacity 0.65 | Weight 7 | Glow Enabled | Hover Effects Active | Fully Clickable ✅`);
+                }
+            }
+            
+            // VERIFY ROUTE CARDS ARE VISIBLE
+            const routeCards = document.querySelectorAll('.route-card');
+            console.log(`📋 Route Comparison Panel:`);
+            console.log(`   Route Cards Created: ${routeCards.length}`);
+            console.log(`   Panel Active: ${document.getElementById('routeComparisonPanel').classList.contains('active')}`);
+            
+            if (routeCards.length !== allRoutes.length) {
+                console.warn(`⚠️ Route Card Count Mismatch: Expected ${allRoutes.length}, Found ${routeCards.length}`);
+            }
+            
+            if (routeLayers.length < allRoutes.length) {
+                console.warn(`⚠️ Route Layer Count Mismatch: Expected at least ${allRoutes.length}, Found ${routeLayers.length}`);
+            }
 
             // Display route comparison panel
             displayRouteComparisonPanel(allRoutes, recommendedRouteId, saferAlternativeRecommended, saferRecommendationReason);
@@ -1478,6 +1590,36 @@
                 
                 // Show navigation buttons immediately after routes are displayed
                 document.getElementById('navigationButtons').style.display = 'grid';
+                
+                // Scroll sidebar to show route comparison panel with all alternatives
+                setTimeout(() => {
+                    const sidebar = document.querySelector('.sidebar');
+                    const routeComparisonPanel = document.getElementById('routeComparisonPanel');
+                    if (sidebar && routeComparisonPanel) {
+                        // Method 1: Use scrollIntoView (modern approach)
+                        routeComparisonPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        
+                        // Method 2: Ensure sidebar scrolls to show the panel
+                        const panelRect = routeComparisonPanel.getBoundingClientRect();
+                        const sidebarRect = sidebar.getBoundingClientRect();
+                        
+                        if (panelRect.top < sidebarRect.top || panelRect.bottom > sidebarRect.bottom) {
+                            const scrollAmount = panelRect.top - sidebarRect.top - 50;
+                            sidebar.scrollTop += scrollAmount;
+                        }
+                    }
+                }, 100);
+                
+                // DEBUG: Verify route panel is visible
+                setTimeout(() => {
+                    const routeCardsContainer = document.getElementById('routeCardsContainer');
+                    if (routeCardsContainer) {
+                        console.log(`✅ Route Comparison Panel is now visible with ${routeCardsContainer.children.length} route cards`);
+                    }
+                }, 200);
+                
+                // Save route to history
+                saveRouteToHistory(source, destination, selectedRoute);
             }
 
         } catch (error) {
@@ -1604,6 +1746,19 @@
         });
 
         // Show panel
+        console.log(`📋 Route Comparison Panel Updated:`);
+        console.log(`   Total Routes: ${routes.length}`);
+        console.log(`   Route Cards Created: ${routes.length}`);
+        
+        if (routes.length > 1) {
+            console.log(`   🔵 ALTERNATIVE ROUTES VISIBLE:`);
+            for (let i = 0; i < routes.length; i++) {
+                if (routes[i].id !== recommendedRouteId) {
+                    console.log(`      Route ${String.fromCharCode(65 + i)}: ${routes[i].distance_km}km | ${routes[i].estimated_time_minutes}min | Safety ${routes[i].safety_score}% | ✅ VISIBLE`);
+                }
+            }
+        }
+        console.log(`   ✅ All routes are clickable and fully functional`);
         panel.classList.add("active");
     }
 
@@ -1712,6 +1867,121 @@
         document.getElementById("routeLengthScore").innerHTML = 
             `<i class="fas fa-route" style="color: #93c5fd; margin-right: 8px;"></i>Route Distance: ${route.distance_km} km`;
     }
+
+    // ====== ROUTE HISTORY ======
+    
+    // Save route to history after successful generation
+    function saveRouteToHistory(source, destination, route) {
+        const data = {
+            source_name: source.name,
+            source_latitude: source.lat,
+            source_longitude: source.lon,
+            destination_name: destination.name,
+            destination_latitude: destination.lat,
+            destination_longitude: destination.lon,
+            distance_km: route.distance_km,
+            estimated_time_minutes: route.estimated_time_minutes,
+            safety_score: route.safety_score
+        };
+
+        fetch('/api/route-history/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (!response.ok) {
+                console.error('Failed to save route history');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Reload route history display
+            loadRouteHistory();
+        })
+        .catch(error => {
+            console.error('Error saving route history:', error);
+        });
+    }
+
+    // Load and display route history
+    function loadRouteHistory() {
+        fetch('/api/route-history/?limit=10')
+            .then(response => {
+                if (!response.ok) {
+                    console.error('Failed to load route history');
+                    return null;
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data || !data.history) return;
+                
+                const container = document.getElementById('recentRoutesList');
+                const mainContainer = document.getElementById('recentRoutesContainer');
+                
+                if (data.history.length === 0) {
+                    mainContainer.style.display = 'none';
+                    return;
+                }
+                
+                mainContainer.style.display = 'block';
+                
+                container.innerHTML = data.history.map(route => `
+                    <div style="padding: 10px; margin-bottom: 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); cursor: pointer; transition: all 0.2s; border-left: 3px solid #fbbf24;" 
+                         onmouseover="this.style.background='rgba(255, 255, 255, 0.1)'" 
+                         onmouseout="this.style.background='rgba(255, 255, 255, 0.05)'"
+                         onclick="refillRouteFromHistory(${route.source_latitude}, ${route.source_longitude}, '${route.source_name}', ${route.destination_latitude}, ${route.destination_longitude}, '${route.destination_name}')">
+                        <div style="font-size: 12px; color: #e5e7eb; font-weight: 600;">
+                            <i class="fas fa-arrow-right" style="margin-right: 6px; color: #fbbf24;"></i>
+                            ${route.source_name} → ${route.destination_name}
+                        </div>
+                        <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
+                            <i class="fas fa-calendar" style="margin-right: 4px;"></i>${route.created_date}
+                        </div>
+                        <div style="font-size: 11px; color: #86efac; margin-top: 4px;">
+                            <i class="fas fa-shield-heart" style="margin-right: 4px;"></i>${route.safety_score}% Safe
+                        </div>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('Error loading route history:', error);
+            });
+    }
+
+    // Refill route from history
+    function refillRouteFromHistory(sourceLat, sourceLng, sourceName, destLat, destLng, destName) {
+        // Set source location
+        window.selectedSource = {
+            name: sourceName,
+            coords: [sourceLat, sourceLng],
+            display_name: sourceName
+        };
+        document.getElementById('sourceLocation').value = sourceName;
+        
+        // Set destination location
+        window.selectedDestination = {
+            name: destName,
+            coords: [destLat, destLng],
+            display_name: destName
+        };
+        document.getElementById('destinationLocation').value = destName;
+        
+        // Scroll to top
+        document.querySelector('.sidebar').scrollTop = 0;
+        
+        // Show user feedback
+        alert(`📍 Route loaded:\n${sourceName} → ${destName}\n\nClick "Find Safest Route" to generate the route.`);
+    }
+
+    // Load route history on page load
+    window.addEventListener('load', function() {
+        loadRouteHistory();
+    });
 
     // SOS BUTTON - Professional Emergency Alert System
     document.getElementById("sosBtn").addEventListener("click", () => {

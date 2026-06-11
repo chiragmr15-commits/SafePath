@@ -939,19 +939,30 @@
                 },
                 body: JSON.stringify(data)
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || `Error: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.id) {
-                    showAlert(editingContactId ? 'Contact updated!' : 'Contact added!', 'success');
+                    showAlert(editingContactId ? '✅ Contact updated successfully!' : '✅ Contact saved successfully!', 'success');
                     closeModal();
                     loadContacts();
+                } else if (data.error) {
+                    showAlert(data.error, 'error');
                 } else {
-                    showAlert(data.error || 'Error saving contact', 'error');
+                    showAlert('✅ Contact saved successfully!', 'success');
+                    closeModal();
+                    loadContacts();
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                showAlert('Error saving contact', 'error');
+                showAlert(error.message || 'Error saving contact', 'error');
             });
         }
 
@@ -964,14 +975,21 @@
                     'X-CSRFToken': getCookie('csrftoken')
                 }
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || `Error: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
-                showAlert('Contact deleted!', 'success');
+                showAlert('✅ Contact deleted successfully!', 'success');
                 loadContacts();
             })
             .catch(error => {
                 console.error('Error:', error);
-                showAlert('Error deleting contact', 'error');
+                showAlert(error.message || 'Error deleting contact', 'error');
             });
         }
 

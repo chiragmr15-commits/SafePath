@@ -674,47 +674,128 @@
         function saveSettings() {
             const settings = {
                 theme: document.body.classList.contains('light-mode') ? 'light' : 'dark',
-                autoTheme: document.getElementById('autoThemeToggle').classList.contains('active'),
-                safetyAlerts: document.getElementById('safetyAlerts').classList.contains('active'),
-                locationUpdates: document.getElementById('locationUpdates').classList.contains('active'),
-                communityReports: document.getElementById('communityReports').classList.contains('active'),
-                emailNotifications: document.getElementById('emailNotifications').classList.contains('active'),
-                aiRecommendations: document.getElementById('aiRecommendations').classList.contains('active'),
-                analytics: document.getElementById('analytics').classList.contains('active'),
-                heatmap: document.getElementById('heatmap').classList.contains('active'),
-                quickAccess: document.getElementById('quickAccess').classList.contains('active'),
-                twoFactorAuth: document.getElementById('twoFactorAuth').classList.contains('active'),
-                dataPrivacy: document.getElementById('dataPrivacy').classList.contains('active')
+                auto_theme: document.getElementById('autoThemeToggle').classList.contains('active'),
+                safety_alerts: document.getElementById('safetyAlerts').classList.contains('active'),
+                location_updates: document.getElementById('locationUpdates').classList.contains('active'),
+                community_reports: document.getElementById('communityReports').classList.contains('active'),
+                email_notifications: document.getElementById('emailNotifications').classList.contains('active'),
+                show_ai_recommendations: document.getElementById('aiRecommendations').classList.contains('active'),
+                show_analytics: document.getElementById('analytics').classList.contains('active'),
+                show_heatmap: document.getElementById('heatmap').classList.contains('active'),
+                show_quick_access: document.getElementById('quickAccess').classList.contains('active'),
+                two_factor_auth: document.getElementById('twoFactorAuth').classList.contains('active'),
+                data_privacy: document.getElementById('dataPrivacy').classList.contains('active'),
+                session_timeout: parseInt(document.querySelector('[data-timeout].active').getAttribute('data-timeout') || '30')
             };
 
-            // Save to localStorage
-            localStorage.setItem('userSettings', JSON.stringify(settings));
-
-            // Show success message
-            const successMsg = document.getElementById('successMessage');
-            successMsg.style.display = 'block';
-            setTimeout(() => {
-                successMsg.style.display = 'none';
-            }, 3000);
+            // Save to backend API
+            fetch('/api/user-preferences/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to save settings');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Save to localStorage as well (fallback)
+                localStorage.setItem('userSettings', JSON.stringify(settings));
+                
+                // Show success message
+                const successMsg = document.getElementById('successMessage');
+                successMsg.style.display = 'block';
+                setTimeout(() => {
+                    successMsg.style.display = 'none';
+                }, 3000);
+            })
+            .catch(error => {
+                console.error('Error saving settings:', error);
+                // Show error message
+                const successMsg = document.getElementById('successMessage');
+                successMsg.textContent = 'Error saving settings. Trying to save locally...';
+                successMsg.style.display = 'block';
+                
+                // Fallback to localStorage
+                localStorage.setItem('userSettings', JSON.stringify(settings));
+                
+                setTimeout(() => {
+                    successMsg.style.display = 'none';
+                }, 3000);
+            });
         }
 
         // ==================== LOAD SAVED SETTINGS ====================
         function loadSettings() {
-            const saved = localStorage.getItem('userSettings');
-            if (saved) {
-                const settings = JSON.parse(saved);
-                
-                if (settings.safetyAlerts) document.getElementById('safetyAlerts').classList.add('active');
-                if (settings.locationUpdates) document.getElementById('locationUpdates').classList.add('active');
-                if (settings.communityReports) document.getElementById('communityReports').classList.add('active');
-                if (settings.emailNotifications) document.getElementById('emailNotifications').classList.add('active');
-                if (settings.aiRecommendations) document.getElementById('aiRecommendations').classList.add('active');
-                if (settings.analytics) document.getElementById('analytics').classList.add('active');
-                if (settings.heatmap) document.getElementById('heatmap').classList.add('active');
-                if (settings.quickAccess) document.getElementById('quickAccess').classList.add('active');
-                if (settings.twoFactorAuth) document.getElementById('twoFactorAuth').classList.add('active');
-                if (settings.dataPrivacy) document.getElementById('dataPrivacy').classList.add('active');
+            // First try to load from backend API
+            fetch('/api/user-preferences/')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load settings');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Apply settings from backend
+                    if (data.safety_alerts) document.getElementById('safetyAlerts').classList.add('active');
+                    if (data.location_updates) document.getElementById('locationUpdates').classList.add('active');
+                    if (data.community_reports) document.getElementById('communityReports').classList.add('active');
+                    if (data.email_notifications) document.getElementById('emailNotifications').classList.add('active');
+                    if (data.show_ai_recommendations) document.getElementById('aiRecommendations').classList.add('active');
+                    if (data.show_analytics) document.getElementById('analytics').classList.add('active');
+                    if (data.show_heatmap) document.getElementById('heatmap').classList.add('active');
+                    if (data.show_quick_access) document.getElementById('quickAccess').classList.add('active');
+                    if (data.two_factor_auth) document.getElementById('twoFactorAuth').classList.add('active');
+                    if (data.data_privacy) document.getElementById('dataPrivacy').classList.add('active');
+                    if (data.theme === 'light') switchTheme('light');
+                    if (data.auto_theme) document.getElementById('autoThemeToggle').classList.add('active');
+                    
+                    // Set session timeout
+                    const timeoutBtn = document.querySelector(`[data-timeout="${data.session_timeout}"]`);
+                    if (timeoutBtn) {
+                        document.querySelectorAll('[data-timeout]').forEach(btn => btn.classList.remove('active'));
+                        timeoutBtn.classList.add('active');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading settings from backend:', error);
+                    // Fallback to localStorage
+                    const saved = localStorage.getItem('userSettings');
+                    if (saved) {
+                        const settings = JSON.parse(saved);
+                        
+                        if (settings.safetyAlerts) document.getElementById('safetyAlerts').classList.add('active');
+                        if (settings.locationUpdates) document.getElementById('locationUpdates').classList.add('active');
+                        if (settings.communityReports) document.getElementById('communityReports').classList.add('active');
+                        if (settings.emailNotifications) document.getElementById('emailNotifications').classList.add('active');
+                        if (settings.aiRecommendations) document.getElementById('aiRecommendations').classList.add('active');
+                        if (settings.analytics) document.getElementById('analytics').classList.add('active');
+                        if (settings.heatmap) document.getElementById('heatmap').classList.add('active');
+                        if (settings.quickAccess) document.getElementById('quickAccess').classList.add('active');
+                        if (settings.twoFactorAuth) document.getElementById('twoFactorAuth').classList.add('active');
+                        if (settings.dataPrivacy) document.getElementById('dataPrivacy').classList.add('active');
+                    }
+                });
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
             }
+            return cookieValue;
         }
 
         // Initialize settings on page load

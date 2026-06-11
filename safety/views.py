@@ -13,7 +13,7 @@ from django.contrib import messages
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
 
-from .models import UnsafeZone, CommunityReport, EmergencyContact, SOSAlert, SOSDeliveryLog
+from .models import UnsafeZone, CommunityReport, EmergencyContact, SOSAlert, SOSDeliveryLog, RouteHistory, UserPreferences
 
 DEFAULT_ZONES = [
     {
@@ -1305,6 +1305,182 @@ def api_reverse_geocode(request):
         }, status=400)
 
 
+# ================ COMMUNITY REPORTS STATISTICS ================
+
+@require_http_methods(['GET'])
+@csrf_exempt
+def api_reports_statistics(request):
+    """
+    Get community reports statistics for dashboard integration.
+    Returns total reports, severity breakdown, recent reports, etc.
+    """
+    try:
+        all_reports = CommunityReport.objects.all()
+        
+        # Count by severity
+        severity_counts = {
+            'low': all_reports.filter(severity='low').count(),
+            'medium': all_reports.filter(severity='medium').count(),
+            'high': all_reports.filter(severity='high').count(),
+            'critical': all_reports.filter(severity='critical').count(),
+        }
+        
+        total_reports = all_reports.count()
+        verified_reports = all_reports.filter(is_verified=True).count()
+        
+        # Get recent reports (last 7 days)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        recent_reports = all_reports.filter(created_at__gte=seven_days_ago).count()
+        
+        # Get last incident time
+        last_report = all_reports.order_by('-created_at').first()
+        last_incident_time = last_report.created_at.isoformat() if last_report else None
+        
+        return JsonResponse({
+            'total_reports': total_reports,
+            'verified_reports': verified_reports,
+            'severity_breakdown': severity_counts,
+            'recent_reports_7days': recent_reports,
+            'last_incident': last_incident_time,
+            'high_and_critical': severity_counts['high'] + severity_counts['critical']
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+# ================ AI RECOMMENDATIONS BASED ON REAL DATA ================
+
+@require_http_methods(['GET'])
+@csrf_exempt
+def api_ai_recommendations(request):
+    """
+    Generate AI recommendations based on actual community reports and unsafe zones.
+    Returns personalized safety recommendations.
+    """
+    try:
+        # Get current location (optional)
+        lat = request.GET.get('lat')
+        lon = request.GET.get('lon')
+        
+        all_reports = CommunityReport.objects.all()
+        all_zones = UnsafeZone.objects.all()
+        
+        # Analyze report severity
+        critical_reports = all_reports.filter(severity='critical').count()
+        high_reports = all_reports.filter(severity='high').count()
+        medium_reports = all_reports.filter(severity='medium').count()
+        low_reports = all_reports.filter(severity='low').count()
+        
+        recommendations = []
+        safety_level = 'Safe'
+        alert_level = 'Low'
+        
+        # Generate recommendations based on report data
+        if critical_reports > 0:
+            recommendations.append({
+                'priority': 'Critical',
+                'message': f'🚨 Critical incidents reported: {critical_reports} recent danger{" incident" if critical_reports == 1 else " incidents"} in monitored areas. Avoid traveling alone.',
+                'color': '#ef4444',
+                'icon': 'fa-exclamation-circle'
+            })
+            safety_level = 'Unsafe'
+            alert_level = 'Critical'
+        
+        if high_reports > 2:
+            recommendations.append({
+                'priority': 'High',
+                'message': f'⚠️ High-risk area: {high_reports} serious incidents reported recently. Increase vigilance.',
+                'color': '#f97316',
+                'icon': 'fa-triangle-exclamation'
+            })
+            if safety_level != 'Unsafe':
+                safety_level = 'Moderate'
+            if alert_level == 'Low':
+                alert_level = 'High'
+        
+        if medium_reports > 5:
+            recommendations.append({
+                'priority': 'Medium',
+                'message': f'⚠️ Moderate incidents reported: {medium_reports} reports in this area. Stay alert.',
+                'color': '#eab308',
+                'icon': 'fa-circle-exclamation'
+            })
+            if safety_level == 'Safe':
+                safety_level = 'Moderate'
+        
+        # Recommendations if area is safe
+        if low_reports + medium_reports + high_reports + critical_reports == 0:
+            recommendations.append({
+                'priority': 'Info',
+                'message': '✅ No recent incidents reported in monitored areas. Area appears safe.',
+                'color': '#10b981',
+                'icon': 'fa-check-circle'
+            })
+            safety_level = 'Safe'
+            alert_level = 'Low'
+        elif critical_reports == 0 and high_reports == 0:
+            if medium_reports + low_reports < 3:
+                recommendations.append({
+                    'priority': 'Info',
+                    'message': '✓ Relatively safe: Limited incident reports. Exercise normal precautions.',
+                    'color': '#10b981',
+                    'icon': 'fa-info-circle'
+                })
+                if safety_level == 'Safe':
+                    pass
+        
+        # Time-based recommendations
+        current_hour = datetime.now().hour
+        if 21 <= current_hour or current_hour < 6:
+            recommendations.append({
+                'priority': 'Timing',
+                'message': '🌙 Night travel detected. Recommend using well-lit routes and sharing your location.',
+                'color': '#8b5cf6',
+                'icon': 'fa-moon'
+            })
+        
+        # Area-specific recommendations if location provided
+        if lat and lon:
+            try:
+                lat_f = float(lat)
+                lon_f = float(lon)
+                
+                # Check for nearby high-severity reports
+                area_high_reports = all_reports.filter(severity__in=['high', 'critical'])
+                nearby_critical = 0
+                
+                for report in area_high_reports:
+                    dist = calculate_distance(lat_f, lon_f, report.latitude, report.longitude)
+                    if dist < 2000:  # Within 2km
+                        nearby_critical += 1
+                
+                if nearby_critical > 0:
+                    recommendations.append({
+                        'priority': 'Location',
+                        'message': f'📍 {nearby_critical} critical incident{"s" if nearby_critical > 1 else ""} reported within 2km. Consider alternative routes.',
+                        'color': '#ef4444',
+                        'icon': 'fa-map-pin'
+                    })
+            except (ValueError, TypeError):
+                pass
+        
+        return JsonResponse({
+            'safety_level': safety_level,
+            'alert_level': alert_level,
+            'recommendations': recommendations,
+            'total_reports': all_reports.count(),
+            'report_breakdown': {
+                'critical': critical_reports,
+                'high': high_reports,
+                'medium': medium_reports,
+                'low': low_reports
+            },
+            'unsafe_zones_count': all_zones.count()
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
 # ================ PROFILE & SETTINGS PAGES ================
 
 @login_required(login_url='login')
@@ -1321,13 +1497,17 @@ def settings_view(request):
 
 # ================ EMERGENCY CONTACTS API ================
 
-@login_required
 @require_http_methods(['GET', 'POST'])
+@csrf_exempt
 def api_emergency_contacts(request):
     """
     GET: List all emergency contacts for the user
     POST: Create a new emergency contact
     """
+    # Check authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
     if request.method == 'GET':
         contacts = EmergencyContact.objects.filter(user=request.user).values(
             'id', 'name', 'relationship', 'phone_number', 'alternate_number', 'created_at'
@@ -1344,14 +1524,14 @@ def api_emergency_contacts(request):
             
             # Validation
             if not name or not phone_number:
-                return HttpResponseBadRequest('Name and phone number are required')
+                return JsonResponse({'error': 'Name and phone number are required'}, status=400)
             
             if relationship not in ['mother', 'father', 'brother', 'sister', 'friend', 'guardian', 'police', 'other']:
-                return HttpResponseBadRequest('Invalid relationship type')
+                return JsonResponse({'error': 'Invalid relationship type'}, status=400)
             
             # Check if contact already exists
             if EmergencyContact.objects.filter(user=request.user, phone_number=phone_number).exists():
-                return HttpResponseBadRequest('This phone number is already added')
+                return JsonResponse({'error': 'This phone number is already added'}, status=400)
             
             contact = EmergencyContact.objects.create(
                 user=request.user,
@@ -1371,18 +1551,22 @@ def api_emergency_contacts(request):
             }, status=201)
         
         except json.JSONDecodeError:
-            return HttpResponseBadRequest('Invalid JSON')
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
         except Exception as e:
-            return HttpResponseBadRequest(f'Error: {str(e)}')
+            return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
 
 
-@login_required
 @require_http_methods(['PUT', 'DELETE'])
+@csrf_exempt
 def api_emergency_contact_detail(request, contact_id):
     """
     PUT: Update an emergency contact
     DELETE: Delete an emergency contact
     """
+    # Check authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
     try:
         contact = EmergencyContact.objects.get(id=contact_id, user=request.user)
     except EmergencyContact.DoesNotExist:
@@ -1407,11 +1591,92 @@ def api_emergency_contact_detail(request, contact_id):
                 'updated_at': contact.updated_at.isoformat(),
             })
         except Exception as e:
-            return HttpResponseBadRequest(f'Error: {str(e)}')
+            return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
     
     elif request.method == 'DELETE':
         contact.delete()
         return JsonResponse({'message': 'Contact deleted successfully'})
+
+
+# ================ USER PREFERENCES API ================
+
+@require_http_methods(['GET', 'POST'])
+@csrf_exempt
+def api_user_preferences(request):
+    """
+    GET: Get user preferences
+    POST: Update user preferences
+    """
+    # Check authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    try:
+        preferences, created = UserPreferences.objects.get_or_create(user=request.user)
+    except Exception as e:
+        return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
+    
+    if request.method == 'GET':
+        return JsonResponse({
+            'id': preferences.id,
+            'safety_alerts': preferences.safety_alerts,
+            'location_updates': preferences.location_updates,
+            'community_reports': preferences.community_reports,
+            'email_notifications': preferences.email_notifications,
+            'show_ai_recommendations': preferences.show_ai_recommendations,
+            'show_analytics': preferences.show_analytics,
+            'show_heatmap': preferences.show_heatmap,
+            'show_quick_access': preferences.show_quick_access,
+            'theme': preferences.theme,
+            'auto_theme': preferences.auto_theme,
+            'two_factor_auth': preferences.two_factor_auth,
+            'data_privacy': preferences.data_privacy,
+            'session_timeout': preferences.session_timeout,
+        })
+    
+    elif request.method == 'POST':
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            
+            # Update preferences
+            preferences.safety_alerts = body.get('safety_alerts', preferences.safety_alerts)
+            preferences.location_updates = body.get('location_updates', preferences.location_updates)
+            preferences.community_reports = body.get('community_reports', preferences.community_reports)
+            preferences.email_notifications = body.get('email_notifications', preferences.email_notifications)
+            preferences.show_ai_recommendations = body.get('show_ai_recommendations', preferences.show_ai_recommendations)
+            preferences.show_analytics = body.get('show_analytics', preferences.show_analytics)
+            preferences.show_heatmap = body.get('show_heatmap', preferences.show_heatmap)
+            preferences.show_quick_access = body.get('show_quick_access', preferences.show_quick_access)
+            preferences.theme = body.get('theme', preferences.theme)
+            preferences.auto_theme = body.get('auto_theme', preferences.auto_theme)
+            preferences.two_factor_auth = body.get('two_factor_auth', preferences.two_factor_auth)
+            preferences.data_privacy = body.get('data_privacy', preferences.data_privacy)
+            preferences.session_timeout = body.get('session_timeout', preferences.session_timeout)
+            
+            preferences.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Preferences saved successfully',
+                'id': preferences.id,
+                'safety_alerts': preferences.safety_alerts,
+                'location_updates': preferences.location_updates,
+                'community_reports': preferences.community_reports,
+                'email_notifications': preferences.email_notifications,
+                'show_ai_recommendations': preferences.show_ai_recommendations,
+                'show_analytics': preferences.show_analytics,
+                'show_heatmap': preferences.show_heatmap,
+                'show_quick_access': preferences.show_quick_access,
+                'theme': preferences.theme,
+                'auto_theme': preferences.auto_theme,
+                'two_factor_auth': preferences.two_factor_auth,
+                'data_privacy': preferences.data_privacy,
+                'session_timeout': preferences.session_timeout,
+            })
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': f'Error: {str(e)}'}, status=500)
 
 
 # ================ SOS API ================
@@ -1586,3 +1851,97 @@ def api_sos_history(request):
     
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+# ================ ROUTE HISTORY API ================
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def api_route_history(request):
+    """
+    GET: List recent routes for the user
+    POST: Save a new route to history
+    
+    POST body:
+    {
+        "source_name": str,
+        "source_latitude": float,
+        "source_longitude": float,
+        "destination_name": str,
+        "destination_latitude": float,
+        "destination_longitude": float,
+        "distance_km": float,
+        "estimated_time_minutes": int,
+        "safety_score": int  # 0-100
+    }
+    """
+    if request.method == 'GET':
+        try:
+            limit = int(request.GET.get('limit', 20))
+            offset = int(request.GET.get('offset', 0))
+            
+            # Get route history for user, ordered by most recent
+            routes = RouteHistory.objects.filter(user=request.user)[offset:offset+limit]
+            
+            history = [{
+                'id': route.id,
+                'source_name': route.source_name,
+                'source_latitude': route.source_latitude,
+                'source_longitude': route.source_longitude,
+                'destination_name': route.destination_name,
+                'destination_latitude': route.destination_latitude,
+                'destination_longitude': route.destination_longitude,
+                'distance_km': route.distance_km,
+                'estimated_time_minutes': route.estimated_time_minutes,
+                'safety_score': route.safety_score,
+                'created_at': route.created_at.isoformat(),
+                'created_date': route.created_at.strftime('%b %d, %Y'),
+            } for route in routes]
+            
+            return JsonResponse({
+                'history': history,
+                'total': RouteHistory.objects.filter(user=request.user).count(),
+                'returned': len(history)
+            })
+        except Exception as e:
+            return HttpResponseBadRequest(f'Error: {str(e)}')
+    
+    elif request.method == 'POST':
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            
+            # Validate required fields
+            required_fields = ['source_name', 'source_latitude', 'source_longitude',
+                             'destination_name', 'destination_latitude', 'destination_longitude',
+                             'distance_km', 'estimated_time_minutes', 'safety_score']
+            
+            for field in required_fields:
+                if field not in body:
+                    return HttpResponseBadRequest(f'Missing required field: {field}')
+            
+            # Create route history record
+            route = RouteHistory.objects.create(
+                user=request.user,
+                source_name=body.get('source_name', '').strip(),
+                source_latitude=float(body.get('source_latitude')),
+                source_longitude=float(body.get('source_longitude')),
+                destination_name=body.get('destination_name', '').strip(),
+                destination_latitude=float(body.get('destination_latitude')),
+                destination_longitude=float(body.get('destination_longitude')),
+                distance_km=float(body.get('distance_km')),
+                estimated_time_minutes=int(body.get('estimated_time_minutes')),
+                safety_score=int(body.get('safety_score'))
+            )
+            
+            return JsonResponse({
+                'id': route.id,
+                'message': 'Route saved successfully',
+                'source_name': route.source_name,
+                'destination_name': route.destination_name,
+                'created_at': route.created_at.isoformat(),
+            }, status=201)
+        
+        except (ValueError, TypeError, json.JSONDecodeError) as e:
+            return HttpResponseBadRequest(f'Invalid request: {str(e)}')
+        except Exception as e:
+            return HttpResponseBadRequest(f'Error: {str(e)}')

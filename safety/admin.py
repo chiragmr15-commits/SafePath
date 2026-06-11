@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import UnsafeZone, CommunityReport
+from .models import UnsafeZone, CommunityReport, UserPreferences
 
 @admin.register(UnsafeZone)
 class UnsafeZoneAdmin(admin.ModelAdmin):
@@ -32,3 +32,11 @@ class CommunityReportAdmin(admin.ModelAdmin):
         queryset.delete()
         self.message_user(request, f'{count} reports deleted.')
     delete_reports.short_description = "Delete selected reports"
+
+
+@admin.register(UserPreferences)
+class UserPreferencesAdmin(admin.ModelAdmin):
+    list_display = ('user', 'theme', 'safety_alerts', 'location_updates', 'updated_at')
+    list_filter = ('theme', 'safety_alerts', 'location_updates', 'updated_at')
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('updated_at',)

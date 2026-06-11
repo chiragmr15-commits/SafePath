@@ -65,6 +65,37 @@ class EmergencyContact(models.Model):
         return f"{self.name} ({self.relationship}) - {self.phone_number}"
 
 
+class UserPreferences(models.Model):
+    """Store user-specific settings and preferences"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='preferences')
+    
+    # Safety Alerts & Notifications
+    safety_alerts = models.BooleanField(default=True)
+    location_updates = models.BooleanField(default=True)
+    community_reports = models.BooleanField(default=True)
+    email_notifications = models.BooleanField(default=True)
+    
+    # Dashboard Preferences
+    show_ai_recommendations = models.BooleanField(default=True)
+    show_analytics = models.BooleanField(default=True)
+    show_heatmap = models.BooleanField(default=True)
+    show_quick_access = models.BooleanField(default=True)
+    
+    # Theme & Display
+    theme = models.CharField(max_length=20, choices=[('light', 'Light'), ('dark', 'Dark')], default='dark')
+    auto_theme = models.BooleanField(default=False)
+    
+    # Account Settings
+    two_factor_auth = models.BooleanField(default=False)
+    data_privacy = models.BooleanField(default=True)
+    session_timeout = models.IntegerField(default=30)  # minutes
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Preferences for {self.user.username}"
+
+
 class SOSAlert(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -98,6 +129,27 @@ class SOSDeliveryLog(models.Model):
     delivery_status = models.CharField(max_length=20, choices=DELIVERY_STATUS_CHOICES, default='pending')
     delivered_at = models.DateTimeField(blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
+
+
+class RouteHistory(models.Model):
+    """Store route history for each user"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='route_history')
+    source_name = models.CharField(max_length=255)
+    source_latitude = models.FloatField()
+    source_longitude = models.FloatField()
+    destination_name = models.CharField(max_length=255)
+    destination_latitude = models.FloatField()
+    destination_longitude = models.FloatField()
+    distance_km = models.FloatField()
+    estimated_time_minutes = models.IntegerField()
+    safety_score = models.IntegerField()  # 0-100
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.source_name} → {self.destination_name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

@@ -69,7 +69,17 @@ urlpatterns = [
     path('api/emergency-contacts/', views.api_emergency_contacts, name='api_emergency_contacts'),
     path('api/emergency-contacts/<int:contact_id>/', views.api_emergency_contact_detail, name='api_emergency_contact_detail'),
     
+    # User Preferences API
+    path('api/user-preferences/', views.api_user_preferences, name='api_user_preferences'),
+    
+    # Community Reports Statistics & AI Recommendations
+    path('api/reports-statistics/', views.api_reports_statistics, name='api_reports_statistics'),
+    path('api/ai-recommendations/', views.api_ai_recommendations, name='api_ai_recommendations'),
+    
     # SOS API
     path('api/send-sos/', views.api_send_sos, name='api_send_sos'),
     path('api/sos-history/', views.api_sos_history, name='api_sos_history'),
+    
+    # Route History API
+    path('api/route-history/', views.api_route_history, name='api_route_history'),
 ]
